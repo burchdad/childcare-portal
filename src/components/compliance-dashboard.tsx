@@ -33,6 +33,7 @@ import {
 
 type ModalName = "employee" | "training" | "upload" | "import" | null;
 type SectionName = "Dashboard" | "Employees" | "Training" | "Documents" | "Alerts" | "Audit";
+type ActivityItem = (typeof activityItems)[number];
 type EmployeeRow = DemoEmployee & {
   compliance: ReturnType<typeof evaluateEmployeeCompliance>;
 };
@@ -489,6 +490,8 @@ export function ComplianceDashboard() {
           </div>
         </header>
 
+        {activeSection === "Dashboard" ? (
+          <>
         <section className="border-b border-[#d9dfd1] bg-[#edf2e8]">
           <div className="mx-auto grid max-w-7xl gap-6 px-4 py-6 sm:px-6 lg:grid-cols-[1.3fr_0.7fr] lg:px-8">
             <div>
@@ -760,6 +763,31 @@ export function ComplianceDashboard() {
             </article>
           </div>
         </section>
+          </>
+        ) : (
+          <WorkspaceTab
+            activities={activities}
+            activeSection={activeSection}
+            filteredRows={filteredRows}
+            metrics={metrics}
+            onAddEmployee={() => setModal("employee")}
+            onAddTraining={(employeeId) => {
+              if (employeeId) {
+                setSelectedEmployeeId(employeeId);
+              }
+              setModal("training");
+            }}
+            onExport={handleExport}
+            onRemoveEmployee={handleRemoveEmployee}
+            onUpload={(employeeId) => {
+              if (employeeId) {
+                setSelectedEmployeeId(employeeId);
+              }
+              setModal("upload");
+            }}
+            rows={rows}
+          />
+        )}
       </div>
 
       {modal === "employee" ? (
@@ -906,6 +934,420 @@ function ProgressBar({
       <div className="mt-2 h-2 rounded-full bg-[#e3e7dc]">
         <div className="h-2 rounded-full" style={{ backgroundColor: color, width: `${width}%` }} />
       </div>
+    </div>
+  );
+}
+
+function WorkspaceTab({
+  activities,
+  activeSection,
+  filteredRows,
+  metrics,
+  onAddEmployee,
+  onAddTraining,
+  onExport,
+  onRemoveEmployee,
+  onUpload,
+  rows,
+}: {
+  activities: ActivityItem[];
+  activeSection: Exclude<SectionName, "Dashboard">;
+  filteredRows: EmployeeRow[];
+  metrics: {
+    employees: number;
+    compliant: number;
+    attention: number;
+    nonCompliant: number;
+    missingData: number;
+    trainingDueSoon: number;
+    cprExpiring: number;
+    cprExpired: number;
+    deficient: number;
+    pendingApprovals: number;
+  };
+  onAddEmployee: () => void;
+  onAddTraining: (employeeId?: string) => void;
+  onExport: () => void;
+  onRemoveEmployee: (employee: EmployeeRow) => void;
+  onUpload: (employeeId?: string) => void;
+  rows: EmployeeRow[];
+}) {
+  if (activeSection === "Employees") {
+    return (
+      <section className="mx-auto grid max-w-7xl gap-6 px-4 py-6 sm:px-6 lg:grid-cols-[1fr_320px] lg:px-8">
+        <WorkspacePanel
+          action={
+            <button
+              className="inline-flex h-10 items-center gap-2 rounded-lg bg-[#224433] px-3 text-sm font-semibold text-white"
+              onClick={onAddEmployee}
+              type="button"
+            >
+              <Plus className="h-4 w-4" aria-hidden />
+              Add Employee
+            </button>
+          }
+          description="Add, review, and remove active employee records."
+          title="Employees"
+        >
+          <EmployeeTable
+            employees={filteredRows}
+            onAddTraining={onAddTraining}
+            onRemoveEmployee={onRemoveEmployee}
+          />
+        </WorkspacePanel>
+        <SummaryPanel
+          items={[
+            ["Active employees", metrics.employees],
+            ["Fully compliant", metrics.compliant],
+            ["Needs attention", metrics.attention],
+            ["Missing data", metrics.missingData],
+          ]}
+          title="Roster Summary"
+        />
+      </section>
+    );
+  }
+
+  if (activeSection === "Training") {
+    return (
+      <section className="mx-auto grid max-w-7xl gap-6 px-4 py-6 sm:px-6 lg:grid-cols-[1fr_360px] lg:px-8">
+        <WorkspacePanel
+          action={
+            <button
+              className="inline-flex h-10 items-center gap-2 rounded-lg bg-[#224433] px-3 text-sm font-semibold text-white"
+              onClick={() => onAddTraining()}
+              type="button"
+            >
+              <GraduationCap className="h-4 w-4" aria-hidden />
+              Add Training
+            </button>
+          }
+          description="Approve training and watch hours recalculate immediately."
+          title="Training"
+        >
+          <div className="grid gap-3 md:grid-cols-2">
+            {filteredRows.map((employee) => (
+              <article
+                className="rounded-lg border border-[#e1e6dc] bg-[#fffdf7] p-4"
+                key={employee.id}
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <h3 className="font-semibold">{employee.name}</h3>
+                    <p className="text-sm text-[#66705f]">{employee.role}</p>
+                  </div>
+                  <span
+                    className={`rounded-full px-2.5 py-1 text-xs font-semibold ring-1 ${
+                      statusStyles[employee.compliance.status]
+                    }`}
+                  >
+                    {employee.compliance.status.replace("_", " ")}
+                  </span>
+                </div>
+                <div className="mt-4 space-y-3">
+                  <ProgressBar
+                    color="#6f8b5f"
+                    completed={employee.completedHours}
+                    label="Annual Training"
+                    required={employee.requiredHours}
+                  />
+                  <ProgressBar
+                    color="#478477"
+                    completed={employee.completedInstructorLedHours}
+                    label="Instructor Led"
+                    required={employee.requiredInstructorLedHours}
+                  />
+                </div>
+                <button
+                  className="mt-4 inline-flex h-9 items-center gap-2 rounded-lg border border-[#cbd5c0] bg-white px-3 text-sm font-medium text-[#2f3a34] hover:bg-[#f3f6ef]"
+                  onClick={() => onAddTraining(employee.id)}
+                  type="button"
+                >
+                  <Plus className="h-4 w-4" aria-hidden />
+                  Add Hours
+                </button>
+              </article>
+            ))}
+          </div>
+        </WorkspacePanel>
+        <SummaryPanel
+          items={[
+            ["Training due soon", metrics.trainingDueSoon],
+            ["Hours deficient", metrics.deficient],
+            ["Pending approvals", metrics.pendingApprovals],
+          ]}
+          title="Training Queue"
+        />
+      </section>
+    );
+  }
+
+  if (activeSection === "Documents") {
+    return (
+      <section className="mx-auto grid max-w-7xl gap-6 px-4 py-6 sm:px-6 lg:grid-cols-[1fr_360px] lg:px-8">
+        <WorkspacePanel
+          action={
+            <button
+              className="inline-flex h-10 items-center gap-2 rounded-lg bg-[#224433] px-3 text-sm font-semibold text-white"
+              onClick={() => onUpload()}
+              type="button"
+            >
+              <Upload className="h-4 w-4" aria-hidden />
+              Upload Document
+            </button>
+          }
+          description="Certificate and document actions are grouped by employee."
+          title="Documents"
+        >
+          <div className="grid gap-3 md:grid-cols-2">
+            {filteredRows.map((employee) => (
+              <article className="rounded-lg border border-[#e1e6dc] bg-white p-4" key={employee.id}>
+                <h3 className="font-semibold">{employee.name}</h3>
+                <p className="mt-1 text-sm text-[#66705f]">{employee.location}</p>
+                <dl className="mt-4 grid grid-cols-2 gap-3 text-sm">
+                  <div className="rounded-lg bg-[#f6e8e3] p-3">
+                    <dt className="text-[#855c50]">CPR</dt>
+                    <dd className="font-semibold">{employee.compliance.certifications.cpr}</dd>
+                  </div>
+                  <div className="rounded-lg bg-[#eaf3f1] p-3">
+                    <dt className="text-[#52716b]">First Aid</dt>
+                    <dd className="font-semibold">
+                      {employee.compliance.certifications.firstAid}
+                    </dd>
+                  </div>
+                </dl>
+                <button
+                  className="mt-4 inline-flex h-9 items-center gap-2 rounded-lg border border-[#cbd5c0] bg-white px-3 text-sm font-medium text-[#2f3a34] hover:bg-[#f3f6ef]"
+                  onClick={() => onUpload(employee.id)}
+                  type="button"
+                >
+                  <Upload className="h-4 w-4" aria-hidden />
+                  Upload
+                </button>
+              </article>
+            ))}
+          </div>
+        </WorkspacePanel>
+        <SummaryPanel
+          items={[
+            ["CPR expiring", metrics.cprExpiring],
+            ["CPR expired", metrics.cprExpired],
+            ["Missing data", metrics.missingData],
+          ]}
+          title="Document Risk"
+        />
+      </section>
+    );
+  }
+
+  if (activeSection === "Alerts") {
+    const alertRows = rows.filter((employee) => employee.compliance.status !== "COMPLIANT");
+
+    return (
+      <section className="mx-auto grid max-w-7xl gap-6 px-4 py-6 sm:px-6 lg:grid-cols-[1fr_320px] lg:px-8">
+        <WorkspacePanel
+          description="Open compliance alerts generated from missing data, deadlines, and certifications."
+          title="Alerts"
+        >
+          <div className="space-y-3">
+            {alertRows.map((employee) => (
+              <article
+                className="rounded-lg border border-[#e1e6dc] bg-[#fffdf7] p-4"
+                key={employee.id}
+              >
+                <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                  <div>
+                    <h3 className="font-semibold">{employee.name}</h3>
+                    <p className="text-sm text-[#66705f]">
+                      {employee.location} · {formatDate(employee.annualDueDate)}
+                    </p>
+                    <ul className="mt-3 space-y-1 text-sm text-[#4e5d54]">
+                      {employee.compliance.reasons.slice(0, 3).map((reason) => (
+                        <li className="flex gap-2" key={reason}>
+                          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-[#bc5f2f]" aria-hidden />
+                          {reason}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                  <button
+                    className="inline-flex h-9 items-center gap-2 rounded-lg border border-[#cbd5c0] bg-white px-3 text-sm font-medium text-[#2f3a34] hover:bg-[#f3f6ef]"
+                    onClick={() => onAddTraining(employee.id)}
+                    type="button"
+                  >
+                    <GraduationCap className="h-4 w-4" aria-hidden />
+                    Resolve
+                  </button>
+                </div>
+              </article>
+            ))}
+          </div>
+        </WorkspacePanel>
+        <SummaryPanel
+          items={[
+            ["Attention", metrics.attention],
+            ["Non-compliant", metrics.nonCompliant],
+            ["Missing data", metrics.missingData],
+          ]}
+          title="Alert Summary"
+        />
+      </section>
+    );
+  }
+
+  return (
+    <section className="mx-auto grid max-w-7xl gap-6 px-4 py-6 sm:px-6 lg:grid-cols-[1fr_320px] lg:px-8">
+      <WorkspacePanel
+        action={
+          <button
+            className="inline-flex h-10 items-center gap-2 rounded-lg border border-[#cbd5c0] bg-white px-3 text-sm font-medium text-[#2f3a34] hover:bg-[#f3f6ef]"
+            onClick={onExport}
+            type="button"
+          >
+            <Download className="h-4 w-4" aria-hidden />
+            Export
+          </button>
+        }
+        description="Recent workspace activity with stable audit identities."
+        title="Audit"
+      >
+        <div className="space-y-3">
+          {activities.map((activity) => (
+            <p
+              className="rounded-lg border border-[#e1e6dc] bg-[#fffdf7] p-4 text-sm text-[#4e5d54]"
+              key={activity.id}
+            >
+              {activity.message}
+            </p>
+          ))}
+        </div>
+      </WorkspacePanel>
+      <SummaryPanel
+        items={[
+          ["Audit entries", activities.length],
+          ["Employees tracked", metrics.employees],
+          ["Filtered rows", filteredRows.length],
+        ]}
+        title="Audit Summary"
+      />
+    </section>
+  );
+}
+
+function WorkspacePanel({
+  action,
+  children,
+  description,
+  title,
+}: {
+  action?: React.ReactNode;
+  children: React.ReactNode;
+  description: string;
+  title: string;
+}) {
+  return (
+    <section className="overflow-hidden rounded-lg border border-[#d9dfd1] bg-white shadow-sm">
+      <div className="flex flex-col gap-3 border-b border-[#e5e9df] px-4 py-4 md:flex-row md:items-center md:justify-between">
+        <div>
+          <h2 className="text-lg font-semibold">{title}</h2>
+          <p className="text-sm text-[#66705f]">{description}</p>
+        </div>
+        {action}
+      </div>
+      <div className="p-4">{children}</div>
+    </section>
+  );
+}
+
+function SummaryPanel({
+  items,
+  title,
+}: {
+  items: Array<[string, number]>;
+  title: string;
+}) {
+  return (
+    <aside className="rounded-lg border border-[#d9dfd1] bg-white p-5 shadow-sm">
+      <h2 className="font-semibold">{title}</h2>
+      <div className="mt-4 space-y-3">
+        {items.map(([label, value]) => (
+          <div className="rounded-lg bg-[#f7f8f5] p-3" key={label}>
+            <p className="text-2xl font-semibold text-[#293d32]">{value}</p>
+            <p className="mt-1 text-sm text-[#66705f]">{label}</p>
+          </div>
+        ))}
+      </div>
+    </aside>
+  );
+}
+
+function EmployeeTable({
+  employees,
+  onAddTraining,
+  onRemoveEmployee,
+}: {
+  employees: EmployeeRow[];
+  onAddTraining: (employeeId?: string) => void;
+  onRemoveEmployee: (employee: EmployeeRow) => void;
+}) {
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full min-w-[820px] text-left text-sm">
+        <thead className="bg-[#f7f8f5] text-xs uppercase text-[#677363]">
+          <tr>
+            <th className="px-4 py-3 font-semibold">Employee</th>
+            <th className="px-4 py-3 font-semibold">Location</th>
+            <th className="px-4 py-3 font-semibold">Status</th>
+            <th className="px-4 py-3 font-semibold">Training</th>
+            <th className="px-4 py-3 font-semibold">Deadline</th>
+            <th className="px-4 py-3 font-semibold">Actions</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-[#edf0e8]">
+          {employees.map((employee) => (
+            <tr className="hover:bg-[#fafbf7]" key={employee.id}>
+              <td className="px-4 py-4">
+                <p className="font-medium text-[#18211d]">{employee.name}</p>
+                <p className="text-[#6b735f]">{employee.role}</p>
+              </td>
+              <td className="px-4 py-4 text-[#425148]">{employee.location}</td>
+              <td className="px-4 py-4">
+                <span
+                  className={`rounded-full px-2.5 py-1 text-xs font-semibold ring-1 ${
+                    statusStyles[employee.compliance.status]
+                  }`}
+                >
+                  {employee.compliance.status.replace("_", " ")}
+                </span>
+              </td>
+              <td className="px-4 py-4">
+                {employee.completedHours} / {employee.requiredHours}
+              </td>
+              <td className="px-4 py-4">{formatDate(employee.annualDueDate)}</td>
+              <td className="px-4 py-4">
+                <div className="flex gap-2">
+                  <button
+                    className="flex h-9 w-9 items-center justify-center rounded-lg border border-[#cbd5c0] text-[#2f3a34] hover:bg-[#f3f6ef]"
+                    onClick={() => onAddTraining(employee.id)}
+                    title={`Add training for ${employee.name}`}
+                    type="button"
+                  >
+                    <GraduationCap className="h-4 w-4" aria-hidden />
+                  </button>
+                  <button
+                    className="flex h-9 w-9 items-center justify-center rounded-lg border border-[#e7c7bd] text-[#9a432d] hover:bg-[#fff1ec]"
+                    onClick={() => onRemoveEmployee(employee)}
+                    title={`Remove ${employee.name}`}
+                    type="button"
+                  >
+                    <Trash2 className="h-4 w-4" aria-hidden />
+                  </button>
+                </div>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   );
 }
