@@ -101,6 +101,152 @@ function createCsv(rows: EmployeeRow[]) {
   return [headers, ...body].map((row) => row.map(escapeCsv).join(",")).join("\n");
 }
 
+function createAuditCsv(activities: ActivityItem[]) {
+  const headers = ["ID", "Message"];
+  const body = activities.map((activity) => [activity.id, activity.message]);
+
+  return [headers, ...body].map((row) => row.map(escapeCsv).join(",")).join("\n");
+}
+
+function createEmployeeImportTemplate() {
+  const headers = [
+    "name",
+    "location",
+    "role",
+    "completedHours",
+    "requiredHours",
+    "completedIpHours",
+    "requiredIpHours",
+    "annualDueDate",
+    "cprExpirationDate",
+    "firstAidExpirationDate",
+  ];
+  const example = [
+    "Jordan Lee",
+    "Tyler Center",
+    "Caregiver",
+    6,
+    24,
+    2,
+    5,
+    "2026-12-31",
+    "2027-04-01",
+    "2027-04-01",
+  ];
+
+  return [headers, example].map((row) => row.map(escapeCsv).join(",")).join("\n");
+}
+
+function downloadCsv(filename: string, csv: string) {
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = filename;
+  anchor.click();
+  URL.revokeObjectURL(url);
+}
+
+function parseCsv(text: string) {
+  const rows: string[][] = [];
+  let row: string[] = [];
+  let value = "";
+  let quoted = false;
+
+  for (let index = 0; index < text.length; index += 1) {
+    const character = text[index];
+    const nextCharacter = text[index + 1];
+
+    if (character === '"' && quoted && nextCharacter === '"') {
+      value += '"';
+      index += 1;
+    } else if (character === '"') {
+      quoted = !quoted;
+    } else if (character === "," && !quoted) {
+      row.push(value.trim());
+      value = "";
+    } else if ((character === "\n" || character === "\r") && !quoted) {
+      if (character === "\r" && nextCharacter === "\n") {
+        index += 1;
+      }
+      row.push(value.trim());
+      if (row.some(Boolean)) {
+        rows.push(row);
+      }
+      row = [];
+      value = "";
+    } else {
+      value += character;
+    }
+  }
+
+  row.push(value.trim());
+  if (row.some(Boolean)) {
+    rows.push(row);
+  }
+
+  return rows;
+}
+
+function parseDateCell(value: string) {
+  return value ? new Date(`${value}T12:00:00`) : undefined;
+}
+
+function parseNumberCell(value: string, fallback: number) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+function csvToEmployees(text: string) {
+  const [headers, ...records] = parseCsv(text);
+  const normalizedHeaders = headers.map((header) => header.trim().toLowerCase());
+  const requiredHeaders = ["name", "location", "role", "annualduedate"];
+  const missingHeaders = requiredHeaders.filter(
+    (header) => !normalizedHeaders.includes(header),
+  );
+
+  if (missingHeaders.length > 0) {
+    return {
+      employees: [],
+      errors: [`Missing required column(s): ${missingHeaders.join(", ")}`],
+    };
+  }
+
+  const valueFor = (record: string[], key: string) =>
+    record[normalizedHeaders.indexOf(key.toLowerCase())] ?? "";
+  const errors: string[] = [];
+  const employees = records.flatMap((record, index) => {
+    const rowNumber = index + 2;
+    const name = valueFor(record, "name").trim();
+    const location = valueFor(record, "location").trim();
+    const role = valueFor(record, "role").trim();
+    const annualDueDate = valueFor(record, "annualDueDate").trim();
+
+    if (!name || !location || !role || !annualDueDate) {
+      errors.push(`Row ${rowNumber} skipped because name, location, role, or annualDueDate is blank.`);
+      return [];
+    }
+
+    return [
+      {
+        id: crypto.randomUUID(),
+        name,
+        location,
+        role,
+        completedHours: parseNumberCell(valueFor(record, "completedHours"), 0),
+        requiredHours: parseNumberCell(valueFor(record, "requiredHours"), 24),
+        completedInstructorLedHours: parseNumberCell(valueFor(record, "completedIpHours"), 0),
+        requiredInstructorLedHours: parseNumberCell(valueFor(record, "requiredIpHours"), 5),
+        annualDueDate: parseDateCell(annualDueDate),
+        cprExpirationDate: parseDateCell(valueFor(record, "cprExpirationDate")),
+        firstAidExpirationDate: parseDateCell(valueFor(record, "firstAidExpirationDate")),
+      } satisfies DemoEmployee,
+    ];
+  });
+
+  return { employees, errors };
+}
+
 function Modal({
   children,
   onClose,
@@ -312,14 +458,31 @@ export function ComplianceDashboard() {
     event.currentTarget.reset();
   }
 
-  function handleImportFile() {
+  async function handleImportFile() {
     const file = fileInputRef.current?.files?.[0];
     if (!file) {
       addActivity("Import opened; no workbook selected yet.");
       return;
     }
 
-    addActivity(`${file.name} was staged for workbook import review.`);
+    if (!file.name.toLowerCase().endsWith(".csv")) {
+      addActivity(`${file.name} was rejected. Import currently accepts CSV roster files.`);
+      return;
+    }
+
+    const text = await file.text();
+    const result = csvToEmployees(text);
+
+    if (result.employees.length === 0) {
+      addActivity(`${file.name} imported 0 employees. ${result.errors.join(" ")}`);
+      return;
+    }
+
+    setEmployees((current) => [...current, ...result.employees]);
+    setSelectedEmployeeId(result.employees[0].id);
+    addActivity(
+      `${file.name} imported ${result.employees.length} employee(s). ${result.errors.length} warning(s).`,
+    );
     setModal(null);
     if (fileInputRef.current) {
       fileInputRef.current.value = "";
@@ -328,14 +491,18 @@ export function ComplianceDashboard() {
 
   function handleExport() {
     const csv = createCsv(filteredRows);
-    const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const anchor = document.createElement("a");
-    anchor.href = url;
-    anchor.download = "compliance-risk-list.csv";
-    anchor.click();
-    URL.revokeObjectURL(url);
+    downloadCsv("compliance-risk-list.csv", csv);
     addActivity(`Compliance risk list exported with ${filteredRows.length} row(s).`);
+  }
+
+  function handleExportAudit() {
+    downloadCsv("audit-activity.csv", createAuditCsv(activities));
+    addActivity(`Audit activity exported with ${activities.length} row(s).`);
+  }
+
+  function handleDownloadImportTemplate() {
+    downloadCsv("employee-import-template.csv", createEmployeeImportTemplate());
+    addActivity("Employee import template downloaded.");
   }
 
   const metricCards = [
@@ -777,7 +944,7 @@ export function ComplianceDashboard() {
               }
               setModal("training");
             }}
-            onExport={handleExport}
+            onExportAudit={handleExportAudit}
             onRemoveEmployee={handleRemoveEmployee}
             onUpload={(employeeId) => {
               if (employeeId) {
@@ -889,20 +1056,34 @@ export function ComplianceDashboard() {
       {modal === "import" ? (
         <Modal onClose={() => setModal(null)} title="Import Workbook">
           <div className="grid gap-4 p-5">
+            <p className="text-sm text-[#66705f]">
+              Upload a CSV roster with the template columns. Valid rows are added to the
+              employee roster and compliance is recalculated immediately.
+            </p>
             <input
-              accept=".csv,.xlsx,.xls"
+              accept=".csv,text/csv"
               className="rounded-lg border border-[#d9dfd1] px-3 py-2"
               ref={fileInputRef}
               type="file"
             />
-            <button
-              className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-[#224433] px-3 text-sm font-semibold text-white"
-              onClick={handleImportFile}
-              type="button"
-            >
-              <Upload className="h-4 w-4" aria-hidden />
-              Stage Import
-            </button>
+            <div className="grid gap-2 sm:grid-cols-2">
+              <button
+                className="inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-[#cbd5c0] bg-white px-3 text-sm font-medium text-[#2f3a34] hover:bg-[#f3f6ef]"
+                onClick={handleDownloadImportTemplate}
+                type="button"
+              >
+                <Download className="h-4 w-4" aria-hidden />
+                Template
+              </button>
+              <button
+                className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-[#224433] px-3 text-sm font-semibold text-white"
+                onClick={handleImportFile}
+                type="button"
+              >
+                <Upload className="h-4 w-4" aria-hidden />
+                Import Employees
+              </button>
+            </div>
           </div>
         </Modal>
       ) : null}
@@ -945,7 +1126,7 @@ function WorkspaceTab({
   metrics,
   onAddEmployee,
   onAddTraining,
-  onExport,
+  onExportAudit,
   onRemoveEmployee,
   onUpload,
   rows,
@@ -967,7 +1148,7 @@ function WorkspaceTab({
   };
   onAddEmployee: () => void;
   onAddTraining: (employeeId?: string) => void;
-  onExport: () => void;
+  onExportAudit: () => void;
   onRemoveEmployee: (employee: EmployeeRow) => void;
   onUpload: (employeeId?: string) => void;
   rows: EmployeeRow[];
@@ -1201,7 +1382,7 @@ function WorkspaceTab({
         action={
           <button
             className="inline-flex h-10 items-center gap-2 rounded-lg border border-[#cbd5c0] bg-white px-3 text-sm font-medium text-[#2f3a34] hover:bg-[#f3f6ef]"
-            onClick={onExport}
+            onClick={onExportAudit}
             type="button"
           >
             <Download className="h-4 w-4" aria-hidden />
