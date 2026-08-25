@@ -24,10 +24,6 @@ export async function POST(request: Request) {
     return errorResponse("DATABASE_URL is required before document metadata can be saved.", 503);
   }
 
-  if (!process.env.BLOB_READ_WRITE_TOKEN) {
-    return errorResponse("BLOB_READ_WRITE_TOKEN is required before documents can be uploaded.", 503);
-  }
-
   const form = await request.formData();
   const file = form.get("file");
   const employeeId = String(form.get("employeeId") ?? "").trim();

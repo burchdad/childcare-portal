@@ -43,9 +43,11 @@ audited against the production roster immediately.
 
 ## Document Storage
 
-Set `BLOB_READ_WRITE_TOKEN` from your Vercel Blob store. Training document
-uploads use private Blob objects and save document metadata plus an audit row in
-PostgreSQL through `/api/documents/upload`.
+On Vercel, connect a Blob store to the project and enable access to system
+environment variables so the SDK can use OIDC and `BLOB_STORE_ID`. For local
+development or non-Vercel runtimes, set `BLOB_READ_WRITE_TOKEN` from your Vercel
+Blob store. Training document uploads use private Blob objects and save document
+metadata plus an audit row in PostgreSQL through `/api/documents/upload`.
 
 ## Railway
 
@@ -55,10 +57,10 @@ the schema and the seed script.
 
 ## Vercel
 
-Add both `DATABASE_URL` and `BLOB_READ_WRITE_TOKEN` as project environment
-variables. `DATABASE_URL` can point to the Railway PostgreSQL connection string,
-and `BLOB_READ_WRITE_TOKEN` should come from the Vercel Blob store connected to
-the project.
+Add `DATABASE_URL` as a project environment variable pointing to the Railway
+PostgreSQL connection string. The connected Blob store should provide
+`BLOB_STORE_ID` as a system environment variable; add `BLOB_READ_WRITE_TOKEN`
+only if you need the static-token fallback.
 
 ## Current Product Slice
 
