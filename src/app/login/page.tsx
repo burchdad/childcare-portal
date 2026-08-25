@@ -1,6 +1,14 @@
 import { LoginForm } from "@/components/login-form";
+import { getCurrentUser } from "@/lib/server/auth";
+import { redirect } from "next/navigation";
 
-export default function LoginPage() {
+export default async function LoginPage() {
+  const user = await getCurrentUser();
+
+  if (user) {
+    redirect("/");
+  }
+
   return (
     <main className="flex min-h-screen items-center justify-center bg-[#f7f8f5] px-4 text-[#18211d]">
       <section className="w-full max-w-md rounded-lg border border-[#d9dfd1] bg-white p-6 shadow-sm">

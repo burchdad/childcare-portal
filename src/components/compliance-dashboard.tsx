@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertTriangle,
@@ -16,6 +17,7 @@ import {
   GraduationCap,
   LayoutDashboard,
   LockKeyhole,
+  LogOut,
   Plus,
   Search,
   ShieldCheck,
@@ -31,6 +33,7 @@ import {
   today,
   type DemoEmployee,
 } from "@/lib/demo-data";
+import type { AppRole } from "@/lib/server/auth";
 
 type ModalName = "employee" | "training" | "upload" | "import" | null;
 type SectionName = "Dashboard" | "Employees" | "Training" | "Documents" | "Alerts" | "Audit";
@@ -42,6 +45,11 @@ type ApiEmployee = DemoEmployee & {
   annualDueDate?: string;
   cprExpirationDate?: string;
   firstAidExpirationDate?: string;
+};
+type DashboardUser = {
+  email: string;
+  name: string;
+  role: AppRole;
 };
 
 const statusStyles: Record<ComplianceStatus, string> = {
@@ -295,7 +303,8 @@ function Modal({
   );
 }
 
-export function ComplianceDashboard() {
+export function ComplianceDashboard({ currentUser }: { currentUser: DashboardUser }) {
+  const router = useRouter();
   const [employees, setEmployees] = useState<DemoEmployee[]>(initialEmployees);
   const [activities, setActivities] = useState(activityItems);
   const [activeSection, setActiveSection] = useState<SectionName>("Dashboard");
@@ -425,6 +434,12 @@ export function ComplianceDashboard() {
     setActivities((current) =>
       [{ id: crypto.randomUUID(), message }, ...current].slice(0, 8),
     );
+  }
+
+  async function handleLogout() {
+    await fetch("/api/auth/logout", { method: "POST" });
+    router.push("/login");
+    router.refresh();
   }
 
   async function handleAddEmployee(event: FormEvent<HTMLFormElement>) {
@@ -794,13 +809,23 @@ export function ComplianceDashboard() {
                   <GraduationCap className="h-4 w-4" aria-hidden />
                   Add Training
                 </button>
-                <Link
-                  className="inline-flex h-10 items-center gap-2 rounded-lg border border-[#cbd5c0] bg-white px-3 text-sm font-medium text-[#2f3a34] shadow-sm transition hover:bg-[#f3f6ef]"
-                  href="/login"
-                >
+                <div className="inline-flex h-10 items-center gap-2 rounded-lg border border-[#cbd5c0] bg-white px-3 text-sm text-[#2f3a34] shadow-sm">
                   <LockKeyhole className="h-4 w-4" aria-hidden />
-                  Sign In
-                </Link>
+                  <span className="hidden max-w-40 truncate font-medium sm:inline">
+                    {currentUser.name}
+                  </span>
+                  <span className="rounded-full bg-[#edf2e8] px-2 py-0.5 text-[11px] font-semibold text-[#405048]">
+                    {currentUser.role.replaceAll("_", " ")}
+                  </span>
+                  <button
+                    className="inline-flex h-7 w-7 items-center justify-center rounded-md text-[#4d5b52] hover:bg-[#f3f6ef]"
+                    onClick={handleLogout}
+                    title={`Sign out ${currentUser.email}`}
+                    type="button"
+                  >
+                    <LogOut className="h-4 w-4" aria-hidden />
+                  </button>
+                </div>
               </div>
             </div>
             <div className="flex flex-wrap gap-2 text-sm">
