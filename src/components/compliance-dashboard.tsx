@@ -570,7 +570,7 @@ export function ComplianceDashboard() {
 
       <div className="lg:pl-20">
         <header className="sticky top-0 z-20 border-b border-[#d9dfd1] bg-[#fffdf7]/95 backdrop-blur">
-          <div className="mx-auto flex max-w-7xl flex-col gap-4 px-4 py-4 sm:px-6 lg:px-8">
+          <div className="mx-auto flex max-w-[1500px] flex-col gap-4 px-4 py-4 sm:px-6 lg:px-8">
             <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
               <div>
                 <p className="text-sm font-medium text-[#6b735f]">Ghost AI Solutions</p>
@@ -654,13 +654,33 @@ export function ComplianceDashboard() {
                 Due &lt;= 60 Days
               </button>
             </div>
+            <nav className="grid grid-cols-3 gap-2 border-t border-[#e5e9df] pt-3 text-xs sm:grid-cols-6 lg:hidden">
+              {navItems.map(({ label, icon: Icon }) => (
+                <button
+                  className={`flex min-h-12 flex-col items-center justify-center gap-1 rounded-lg border px-2 py-2 font-medium ${
+                    activeSection === label
+                      ? "border-[#8aa27b] bg-[#edf2e8] text-[#293d32]"
+                      : "border-[#d9dfd1] bg-white text-[#4d5b52]"
+                  }`}
+                  key={label}
+                  onClick={() => {
+                    setActiveSection(label);
+                    addActivity(`${label} view opened.`);
+                  }}
+                  type="button"
+                >
+                  <Icon className="h-4 w-4" aria-hidden />
+                  <span>{label}</span>
+                </button>
+              ))}
+            </nav>
           </div>
         </header>
 
         {activeSection === "Dashboard" ? (
           <>
         <section className="border-b border-[#d9dfd1] bg-[#edf2e8]">
-          <div className="mx-auto grid max-w-7xl gap-6 px-4 py-6 sm:px-6 lg:grid-cols-[1.3fr_0.7fr] lg:px-8">
+          <div className="mx-auto grid max-w-[1500px] gap-6 px-4 py-6 sm:px-6 lg:grid-cols-[1.3fr_0.7fr] lg:px-8">
             <div>
               <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
                 {metricCards.map(({ label, value, icon: Icon, detail }) => (
@@ -751,7 +771,7 @@ export function ComplianceDashboard() {
           </div>
         </section>
 
-        <section className="mx-auto grid max-w-7xl gap-6 px-4 py-6 sm:px-6 lg:grid-cols-[1fr_340px] lg:px-8">
+        <section className="mx-auto grid max-w-[1500px] gap-6 px-4 py-6 sm:px-6 lg:grid-cols-[1fr_340px] lg:px-8">
           <div className="overflow-hidden rounded-lg border border-[#d9dfd1] bg-white shadow-sm">
             <div className="flex flex-col gap-3 border-b border-[#e5e9df] px-4 py-4 md:flex-row md:items-center md:justify-between">
               <div>
@@ -769,50 +789,72 @@ export function ComplianceDashboard() {
                 Export
               </button>
             </div>
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[880px] text-left text-sm">
+            <div className="grid gap-3 p-4 md:hidden">
+              {filteredRows.map((employee) => (
+                <EmployeeCard
+                  employee={employee}
+                  key={employee.id}
+                  onAddTraining={(employeeId) => {
+                    setSelectedEmployeeId(employeeId);
+                    setModal("training");
+                  }}
+                  onRemoveEmployee={handleRemoveEmployee}
+                />
+              ))}
+            </div>
+            <div className="hidden md:block">
+              <table className="w-full table-fixed text-left text-sm">
+                <colgroup>
+                  <col className="w-[18%]" />
+                  <col className="w-[15%]" />
+                  <col className="w-[15%]" />
+                  <col className="w-[16%]" />
+                  <col className="w-[12%]" />
+                  <col className="w-[14%]" />
+                  <col className="w-[10%]" />
+                </colgroup>
                 <thead className="bg-[#f7f8f5] text-xs uppercase text-[#677363]">
                   <tr>
-                    <th className="px-4 py-3 font-semibold">Employee</th>
-                    <th className="px-4 py-3 font-semibold">Location</th>
-                    <th className="px-4 py-3 font-semibold">Status</th>
-                    <th className="px-4 py-3 font-semibold">Training</th>
-                    <th className="px-4 py-3 font-semibold">CPR</th>
-                    <th className="px-4 py-3 font-semibold">Deadline</th>
-                    <th className="px-4 py-3 font-semibold">Actions</th>
+                    <th className="px-3 py-3 font-semibold">Employee</th>
+                    <th className="px-3 py-3 font-semibold">Location</th>
+                    <th className="px-3 py-3 font-semibold">Status</th>
+                    <th className="px-3 py-3 font-semibold">Training</th>
+                    <th className="px-3 py-3 font-semibold">CPR</th>
+                    <th className="px-3 py-3 font-semibold">Deadline</th>
+                    <th className="px-3 py-3 font-semibold">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[#edf0e8]">
                   {filteredRows.map((employee) => (
                     <tr className="hover:bg-[#fafbf7]" key={employee.id}>
-                      <td className="px-4 py-4">
+                      <td className="px-3 py-4 align-top">
                         <p className="font-medium text-[#18211d]">{employee.name}</p>
                         <p className="text-[#6b735f]">{employee.role}</p>
                       </td>
-                      <td className="px-4 py-4 text-[#425148]">{employee.location}</td>
-                      <td className="px-4 py-4">
+                      <td className="px-3 py-4 align-top text-[#425148]">{employee.location}</td>
+                      <td className="px-3 py-4 align-top">
                         <span
-                          className={`rounded-full px-2.5 py-1 text-xs font-semibold ring-1 ${
+                          className={`inline-flex rounded-full px-2 py-1 text-[11px] font-semibold ring-1 ${
                             statusStyles[employee.compliance.status]
                           }`}
                         >
                           {employee.compliance.status.replace("_", " ")}
                         </span>
                       </td>
-                      <td className="px-4 py-4">
+                      <td className="px-3 py-4 align-top">
                         {employee.completedHours} / {employee.requiredHours}
-                        <span className="ml-2 text-[#77816f]">
+                        <span className="block text-[#77816f]">
                           {employee.compliance.annualTraining.remaining} remaining
                         </span>
                       </td>
-                      <td className="px-4 py-4">
+                      <td className="px-3 py-4 align-top">
                         {employee.compliance.certifications.cpr}
                       </td>
-                      <td className="px-4 py-4">{formatDate(employee.annualDueDate)}</td>
-                      <td className="px-4 py-4">
+                      <td className="px-3 py-4 align-top">{formatDate(employee.annualDueDate)}</td>
+                      <td className="px-3 py-4 align-top">
                         <div className="flex gap-2">
                           <button
-                            className="flex h-9 w-9 items-center justify-center rounded-lg border border-[#cbd5c0] text-[#2f3a34] hover:bg-[#f3f6ef]"
+                            className="flex h-8 w-8 items-center justify-center rounded-lg border border-[#cbd5c0] text-[#2f3a34] hover:bg-[#f3f6ef]"
                             onClick={() => {
                               setSelectedEmployeeId(employee.id);
                               setModal("training");
@@ -823,7 +865,7 @@ export function ComplianceDashboard() {
                             <GraduationCap className="h-4 w-4" aria-hidden />
                           </button>
                           <button
-                            className="flex h-9 w-9 items-center justify-center rounded-lg border border-[#e7c7bd] text-[#9a432d] hover:bg-[#fff1ec]"
+                            className="flex h-8 w-8 items-center justify-center rounded-lg border border-[#e7c7bd] text-[#9a432d] hover:bg-[#fff1ec]"
                             onClick={() => handleRemoveEmployee(employee)}
                             title={`Remove ${employee.name}`}
                             type="button"
@@ -1155,7 +1197,7 @@ function WorkspaceTab({
 }) {
   if (activeSection === "Employees") {
     return (
-      <section className="mx-auto grid max-w-7xl gap-6 px-4 py-6 sm:px-6 lg:grid-cols-[1fr_320px] lg:px-8">
+      <section className="mx-auto grid max-w-[1500px] gap-6 px-4 py-6 sm:px-6 lg:grid-cols-[1fr_320px] lg:px-8">
         <WorkspacePanel
           action={
             <button
@@ -1191,7 +1233,7 @@ function WorkspaceTab({
 
   if (activeSection === "Training") {
     return (
-      <section className="mx-auto grid max-w-7xl gap-6 px-4 py-6 sm:px-6 lg:grid-cols-[1fr_360px] lg:px-8">
+      <section className="mx-auto grid max-w-[1500px] gap-6 px-4 py-6 sm:px-6 lg:grid-cols-[1fr_360px] lg:px-8">
         <WorkspacePanel
           action={
             <button
@@ -1265,7 +1307,7 @@ function WorkspaceTab({
 
   if (activeSection === "Documents") {
     return (
-      <section className="mx-auto grid max-w-7xl gap-6 px-4 py-6 sm:px-6 lg:grid-cols-[1fr_360px] lg:px-8">
+      <section className="mx-auto grid max-w-[1500px] gap-6 px-4 py-6 sm:px-6 lg:grid-cols-[1fr_360px] lg:px-8">
         <WorkspacePanel
           action={
             <button
@@ -1325,7 +1367,7 @@ function WorkspaceTab({
     const alertRows = rows.filter((employee) => employee.compliance.status !== "COMPLIANT");
 
     return (
-      <section className="mx-auto grid max-w-7xl gap-6 px-4 py-6 sm:px-6 lg:grid-cols-[1fr_320px] lg:px-8">
+      <section className="mx-auto grid max-w-[1500px] gap-6 px-4 py-6 sm:px-6 lg:grid-cols-[1fr_320px] lg:px-8">
         <WorkspacePanel
           description="Open compliance alerts generated from missing data, deadlines, and certifications."
           title="Alerts"
@@ -1377,7 +1419,7 @@ function WorkspaceTab({
   }
 
   return (
-    <section className="mx-auto grid max-w-7xl gap-6 px-4 py-6 sm:px-6 lg:grid-cols-[1fr_320px] lg:px-8">
+    <section className="mx-auto grid max-w-[1500px] gap-6 px-4 py-6 sm:px-6 lg:grid-cols-[1fr_320px] lg:px-8">
       <WorkspacePanel
         action={
           <button
@@ -1472,43 +1514,62 @@ function EmployeeTable({
   onRemoveEmployee: (employee: EmployeeRow) => void;
 }) {
   return (
-    <div className="overflow-x-auto">
-      <table className="w-full min-w-[820px] text-left text-sm">
+    <>
+    <div className="grid gap-3 md:hidden">
+      {employees.map((employee) => (
+        <EmployeeCard
+          employee={employee}
+          key={employee.id}
+          onAddTraining={onAddTraining}
+          onRemoveEmployee={onRemoveEmployee}
+        />
+      ))}
+    </div>
+    <div className="hidden md:block">
+      <table className="w-full table-fixed text-left text-sm">
+        <colgroup>
+          <col className="w-[22%]" />
+          <col className="w-[18%]" />
+          <col className="w-[18%]" />
+          <col className="w-[16%]" />
+          <col className="w-[16%]" />
+          <col className="w-[10%]" />
+        </colgroup>
         <thead className="bg-[#f7f8f5] text-xs uppercase text-[#677363]">
           <tr>
-            <th className="px-4 py-3 font-semibold">Employee</th>
-            <th className="px-4 py-3 font-semibold">Location</th>
-            <th className="px-4 py-3 font-semibold">Status</th>
-            <th className="px-4 py-3 font-semibold">Training</th>
-            <th className="px-4 py-3 font-semibold">Deadline</th>
-            <th className="px-4 py-3 font-semibold">Actions</th>
+            <th className="px-3 py-3 font-semibold">Employee</th>
+            <th className="px-3 py-3 font-semibold">Location</th>
+            <th className="px-3 py-3 font-semibold">Status</th>
+            <th className="px-3 py-3 font-semibold">Training</th>
+            <th className="px-3 py-3 font-semibold">Deadline</th>
+            <th className="px-3 py-3 font-semibold">Actions</th>
           </tr>
         </thead>
         <tbody className="divide-y divide-[#edf0e8]">
           {employees.map((employee) => (
             <tr className="hover:bg-[#fafbf7]" key={employee.id}>
-              <td className="px-4 py-4">
+              <td className="px-3 py-4 align-top">
                 <p className="font-medium text-[#18211d]">{employee.name}</p>
                 <p className="text-[#6b735f]">{employee.role}</p>
               </td>
-              <td className="px-4 py-4 text-[#425148]">{employee.location}</td>
-              <td className="px-4 py-4">
+              <td className="px-3 py-4 align-top text-[#425148]">{employee.location}</td>
+              <td className="px-3 py-4 align-top">
                 <span
-                  className={`rounded-full px-2.5 py-1 text-xs font-semibold ring-1 ${
+                  className={`inline-flex rounded-full px-2 py-1 text-[11px] font-semibold ring-1 ${
                     statusStyles[employee.compliance.status]
                   }`}
                 >
                   {employee.compliance.status.replace("_", " ")}
                 </span>
               </td>
-              <td className="px-4 py-4">
+              <td className="px-3 py-4 align-top">
                 {employee.completedHours} / {employee.requiredHours}
               </td>
-              <td className="px-4 py-4">{formatDate(employee.annualDueDate)}</td>
-              <td className="px-4 py-4">
+              <td className="px-3 py-4 align-top">{formatDate(employee.annualDueDate)}</td>
+              <td className="px-3 py-4 align-top">
                 <div className="flex gap-2">
                   <button
-                    className="flex h-9 w-9 items-center justify-center rounded-lg border border-[#cbd5c0] text-[#2f3a34] hover:bg-[#f3f6ef]"
+                    className="flex h-8 w-8 items-center justify-center rounded-lg border border-[#cbd5c0] text-[#2f3a34] hover:bg-[#f3f6ef]"
                     onClick={() => onAddTraining(employee.id)}
                     title={`Add training for ${employee.name}`}
                     type="button"
@@ -1516,7 +1577,7 @@ function EmployeeTable({
                     <GraduationCap className="h-4 w-4" aria-hidden />
                   </button>
                   <button
-                    className="flex h-9 w-9 items-center justify-center rounded-lg border border-[#e7c7bd] text-[#9a432d] hover:bg-[#fff1ec]"
+                    className="flex h-8 w-8 items-center justify-center rounded-lg border border-[#e7c7bd] text-[#9a432d] hover:bg-[#fff1ec]"
                     onClick={() => onRemoveEmployee(employee)}
                     title={`Remove ${employee.name}`}
                     type="button"
@@ -1530,6 +1591,71 @@ function EmployeeTable({
         </tbody>
       </table>
     </div>
+    </>
+  );
+}
+
+function EmployeeCard({
+  employee,
+  onAddTraining,
+  onRemoveEmployee,
+}: {
+  employee: EmployeeRow;
+  onAddTraining: (employeeId: string) => void;
+  onRemoveEmployee: (employee: EmployeeRow) => void;
+}) {
+  return (
+    <article className="rounded-lg border border-[#e1e6dc] bg-[#fffdf7] p-4">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h3 className="font-semibold text-[#18211d]">{employee.name}</h3>
+          <p className="text-sm text-[#66705f]">
+            {employee.role} · {employee.location}
+          </p>
+        </div>
+        <span
+          className={`shrink-0 rounded-full px-2 py-1 text-[11px] font-semibold ring-1 ${
+            statusStyles[employee.compliance.status]
+          }`}
+        >
+          {employee.compliance.status.replace("_", " ")}
+        </span>
+      </div>
+      <dl className="mt-4 grid grid-cols-2 gap-3 text-sm">
+        <div className="rounded-lg bg-white p-3">
+          <dt className="text-[#66705f]">Training</dt>
+          <dd className="font-semibold">
+            {employee.completedHours} / {employee.requiredHours}
+          </dd>
+        </div>
+        <div className="rounded-lg bg-white p-3">
+          <dt className="text-[#66705f]">CPR</dt>
+          <dd className="font-semibold">{employee.compliance.certifications.cpr}</dd>
+        </div>
+        <div className="col-span-2 rounded-lg bg-white p-3">
+          <dt className="text-[#66705f]">Deadline</dt>
+          <dd className="font-semibold">{formatDate(employee.annualDueDate)}</dd>
+        </div>
+      </dl>
+      <div className="mt-4 grid grid-cols-2 gap-2">
+        <button
+          className="inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-[#cbd5c0] bg-white px-3 text-sm font-medium text-[#2f3a34]"
+          onClick={() => onAddTraining(employee.id)}
+          type="button"
+        >
+          <GraduationCap className="h-4 w-4" aria-hidden />
+          Training
+        </button>
+        <button
+          className="inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-[#e7c7bd] bg-white px-3 text-sm font-medium text-[#9a432d]"
+          onClick={() => onRemoveEmployee(employee)}
+          type="button"
+        >
+          <Trash2 className="h-4 w-4" aria-hidden />
+          Remove
+        </button>
+      </div>
+    </article>
   );
 }
 
@@ -1624,3 +1750,4 @@ function SubmitButton({
     </button>
   );
 }
+
