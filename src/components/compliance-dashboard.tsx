@@ -20,6 +20,7 @@ import {
   LogOut,
   Plus,
   Search,
+  Settings2,
   ShieldCheck,
   Trash2,
   Upload,
@@ -809,6 +810,13 @@ export function ComplianceDashboard({ currentUser }: { currentUser: DashboardUse
                   <GraduationCap className="h-4 w-4" aria-hidden />
                   Add Training
                 </button>
+                <Link
+                  className="inline-flex h-10 items-center gap-2 rounded-lg border border-[#cbd5c0] bg-white px-3 text-sm font-medium text-[#2f3a34] shadow-sm transition hover:bg-[#f3f6ef]"
+                  href="/operations"
+                >
+                  <Settings2 className="h-4 w-4" aria-hidden />
+                  Operations
+                </Link>
                 <div className="inline-flex h-10 items-center gap-2 rounded-lg border border-[#cbd5c0] bg-white px-3 text-sm text-[#2f3a34] shadow-sm">
                   <LockKeyhole className="h-4 w-4" aria-hidden />
                   <span className="hidden max-w-40 truncate font-medium sm:inline">

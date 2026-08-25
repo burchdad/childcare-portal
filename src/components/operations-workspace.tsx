@@ -1,0 +1,573 @@
+"use client";
+
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
+import {
+  BadgeCheck,
+  Download,
+  FileText,
+  GraduationCap,
+  Save,
+  Settings2,
+  Trash2,
+  Upload,
+  UsersRound,
+} from "lucide-react";
+
+type Tab = "employees" | "training" | "certifications" | "documents" | "imports" | "settings";
+type Employee = {
+  id: string;
+  name: string;
+  firstName: string;
+  lastName: string;
+  email?: string | null;
+  phone?: string | null;
+  role: string;
+  jobRoleId: string;
+  employmentStatus: string;
+  annualDueDate?: string | null;
+  compliance: { status: string };
+};
+type DocumentRow = {
+  id: string;
+  documentType: string;
+  fileName: string;
+  fileSize: number;
+  uploadedAt: string;
+  employee?: { firstName: string; lastName: string } | null;
+};
+type ImportBatch = {
+  id: string;
+  fileName: string;
+  status: string;
+  rowCount: number;
+  validRowCount: number;
+  errorRowCount: number;
+  rows: Array<{
+    id: string;
+    rowNumber: number;
+    status: string;
+    mapped: Record<string, string>;
+    errors?: string[] | null;
+  }>;
+};
+type RuleSet = {
+  id: string;
+  name: string;
+  requirements: Array<{
+    id: string;
+    jobRoleId: string;
+    requiredHours: string;
+    minimumInstructorLedHours: string | null;
+    jobRole: { id: string; name: string };
+  }>;
+};
+
+const tabs: Array<{ id: Tab; label: string; icon: typeof UsersRound }> = [
+  { id: "employees", label: "Employees", icon: UsersRound },
+  { id: "training", label: "Training", icon: GraduationCap },
+  { id: "certifications", label: "Certifications", icon: BadgeCheck },
+  { id: "documents", label: "Documents", icon: FileText },
+  { id: "imports", label: "Imports", icon: Upload },
+  { id: "settings", label: "Settings", icon: Settings2 },
+];
+
+function fieldClass() {
+  return "h-10 rounded-lg border border-[#d9dfd1] bg-white px-3 text-sm outline-none";
+}
+
+async function jsonFetch<T>(url: string, init?: RequestInit): Promise<T> {
+  const response = await fetch(url, init);
+  const result = await response.json().catch(() => ({}));
+
+  if (!response.ok) {
+    throw new Error(typeof result.error === "string" ? result.error : "Request failed.");
+  }
+
+  return result as T;
+}
+
+function dateValue(value?: string | null) {
+  return value ? new Date(value).toISOString().slice(0, 10) : "";
+}
+
+export function OperationsWorkspace({ canEdit }: { canEdit: boolean }) {
+  const [activeTab, setActiveTab] = useState<Tab>("employees");
+  const [employees, setEmployees] = useState<Employee[]>([]);
+  const [documents, setDocuments] = useState<DocumentRow[]>([]);
+  const [imports, setImports] = useState<ImportBatch[]>([]);
+  const [ruleSets, setRuleSets] = useState<RuleSet[]>([]);
+  const [selectedEmployeeId, setSelectedEmployeeId] = useState("");
+  const [message, setMessage] = useState("");
+  const importFileRef = useRef<HTMLInputElement>(null);
+
+  const selectedEmployee = useMemo(
+    () => employees.find((employee) => employee.id === selectedEmployeeId) ?? employees[0],
+    [employees, selectedEmployeeId],
+  );
+
+  async function refresh() {
+    const [employeeData, documentData, importData, ruleData] = await Promise.all([
+      jsonFetch<{ employees: Employee[] }>("/api/employees"),
+      jsonFetch<{ documents: DocumentRow[] }>("/api/documents"),
+      jsonFetch<{ batches: ImportBatch[] }>("/api/imports/workbook"),
+      jsonFetch<{ ruleSets: RuleSet[] }>("/api/compliance-rules"),
+    ]);
+
+    setEmployees(employeeData.employees);
+    setDocuments(documentData.documents);
+    setImports(importData.batches);
+    setRuleSets(ruleData.ruleSets);
+    setSelectedEmployeeId((current) => current || employeeData.employees[0]?.id || "");
+  }
+
+  useEffect(() => {
+    let active = true;
+
+    async function loadInitialData() {
+      try {
+        const [employeeData, documentData, importData, ruleData] = await Promise.all([
+          jsonFetch<{ employees: Employee[] }>("/api/employees"),
+          jsonFetch<{ documents: DocumentRow[] }>("/api/documents"),
+          jsonFetch<{ batches: ImportBatch[] }>("/api/imports/workbook"),
+          jsonFetch<{ ruleSets: RuleSet[] }>("/api/compliance-rules"),
+        ]);
+
+        if (!active) return;
+
+        setEmployees(employeeData.employees);
+        setDocuments(documentData.documents);
+        setImports(importData.batches);
+        setRuleSets(ruleData.ruleSets);
+        setSelectedEmployeeId(employeeData.employees[0]?.id || "");
+      } catch (error) {
+        if (active) {
+          setMessage(error instanceof Error ? error.message : "Load failed.");
+        }
+      }
+    }
+
+    void loadInitialData();
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  async function updateEmployee(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!selectedEmployee || !canEdit) return;
+    const form = new FormData(event.currentTarget);
+
+    await jsonFetch(`/api/employees/${selectedEmployee.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        firstName: form.get("firstName"),
+        lastName: form.get("lastName"),
+        email: form.get("email"),
+        phone: form.get("phone"),
+        annualTrainingDueDate: form.get("annualTrainingDueDate"),
+        employmentStatus: form.get("employmentStatus"),
+      }),
+    });
+    setMessage("Employee saved.");
+    await refresh();
+  }
+
+  async function removeEmployee() {
+    if (!selectedEmployee || !canEdit) return;
+
+    await jsonFetch(`/api/employees/${selectedEmployee.id}`, { method: "DELETE" });
+    setMessage(`${selectedEmployee.name} was terminated.`);
+    setSelectedEmployeeId("");
+    await refresh();
+  }
+
+  async function addTraining(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!canEdit) return;
+    const form = new FormData(event.currentTarget);
+
+    await jsonFetch("/api/training", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(Object.fromEntries(form)),
+    });
+    setMessage("Training record saved.");
+    event.currentTarget.reset();
+    await refresh();
+  }
+
+  async function saveCertification(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!canEdit) return;
+    const form = new FormData(event.currentTarget);
+
+    await jsonFetch("/api/certifications", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(Object.fromEntries(form)),
+    });
+    setMessage("Certification saved.");
+    await refresh();
+  }
+
+  async function uploadImport() {
+    const file = importFileRef.current?.files?.[0];
+    if (!file || !canEdit) return;
+    const form = new FormData();
+    form.append("file", file);
+
+    await jsonFetch("/api/imports/workbook", { method: "POST", body: form });
+    setMessage("Workbook staged for review.");
+    if (importFileRef.current) importFileRef.current.value = "";
+    await refresh();
+  }
+
+  async function commitImport(batchId: string) {
+    if (!canEdit) return;
+    await jsonFetch(`/api/imports/workbook/${batchId}/commit`, { method: "POST" });
+    setMessage("Workbook import committed.");
+    await refresh();
+  }
+
+  async function updateRequirement(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!canEdit) return;
+    const form = new FormData(event.currentTarget);
+
+    await jsonFetch("/api/compliance-rules", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(Object.fromEntries(form)),
+    });
+    setMessage("Compliance requirement saved.");
+    await refresh();
+  }
+
+  async function archiveDocument(id: string) {
+    if (!canEdit) return;
+    await jsonFetch("/api/documents", {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id }),
+    });
+    setMessage("Document archived.");
+    await refresh();
+  }
+
+  return (
+    <div className="mt-6 grid gap-5">
+      <nav className="flex gap-2 overflow-x-auto pb-1">
+        {tabs.map(({ id, label, icon: Icon }) => (
+          <button
+            className={`inline-flex h-10 shrink-0 items-center gap-2 rounded-lg border px-3 text-sm font-medium ${
+              activeTab === id
+                ? "border-[#8aa27b] bg-[#edf2e8] text-[#293d32]"
+                : "border-[#d9dfd1] bg-white text-[#4d5b52]"
+            }`}
+            key={id}
+            onClick={() => setActiveTab(id)}
+            type="button"
+          >
+            <Icon className="h-4 w-4" aria-hidden />
+            {label}
+          </button>
+        ))}
+      </nav>
+
+      {message ? (
+        <p className="rounded-lg border border-[#d9dfd1] bg-white px-4 py-3 text-sm text-[#405048]">
+          {message}
+        </p>
+      ) : null}
+
+      {activeTab === "employees" ? (
+        <section className="grid gap-5 lg:grid-cols-[360px_1fr]">
+          <Panel title="Roster">
+            <div className="grid gap-2">
+              {employees.map((employee) => (
+                <button
+                  className={`rounded-lg border px-3 py-2 text-left text-sm ${
+                    selectedEmployee?.id === employee.id
+                      ? "border-[#8aa27b] bg-[#edf2e8]"
+                      : "border-[#e1e6dc] bg-white"
+                  }`}
+                  key={employee.id}
+                  onClick={() => setSelectedEmployeeId(employee.id)}
+                  type="button"
+                >
+                  <span className="font-semibold">{employee.name}</span>
+                  <span className="block text-[#66705f]">
+                    {employee.role} · {employee.compliance.status.replaceAll("_", " ")}
+                  </span>
+                </button>
+              ))}
+            </div>
+          </Panel>
+          <Panel title="Employee Details">
+            {selectedEmployee ? (
+              <form className="grid gap-4" onSubmit={updateEmployee}>
+                <div className="grid gap-3 md:grid-cols-2">
+                  <Input defaultValue={selectedEmployee.firstName} label="First Name" name="firstName" />
+                  <Input defaultValue={selectedEmployee.lastName} label="Last Name" name="lastName" />
+                  <Input defaultValue={selectedEmployee.email ?? ""} label="Email" name="email" />
+                  <Input defaultValue={selectedEmployee.phone ?? ""} label="Phone" name="phone" />
+                  <Input
+                    defaultValue={dateValue(selectedEmployee.annualDueDate)}
+                    label="Annual Due Date"
+                    name="annualTrainingDueDate"
+                    type="date"
+                  />
+                  <label className="grid gap-1 text-sm font-medium">
+                    Employment Status
+                    <select className={fieldClass()} defaultValue={selectedEmployee.employmentStatus} name="employmentStatus">
+                      <option>ACTIVE</option>
+                      <option>LEAVE</option>
+                      <option>TERMINATED</option>
+                      <option>FUTURE_HIRE</option>
+                    </select>
+                  </label>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <Submit disabled={!canEdit} icon={Save}>Save Employee</Submit>
+                  <button
+                    className="inline-flex h-10 items-center gap-2 rounded-lg border border-[#e7c7bd] bg-white px-3 text-sm font-semibold text-[#9a432d]"
+                    disabled={!canEdit}
+                    onClick={removeEmployee}
+                    type="button"
+                  >
+                    <Trash2 className="h-4 w-4" aria-hidden />
+                    Terminate
+                  </button>
+                  <Link className="inline-flex h-10 items-center rounded-lg border border-[#cbd5c0] bg-white px-3 text-sm font-semibold" href={`/employees/${selectedEmployee.id}`}>
+                    Open Profile
+                  </Link>
+                </div>
+              </form>
+            ) : null}
+          </Panel>
+        </section>
+      ) : null}
+
+      {activeTab === "training" ? (
+        <Panel title="Add Training Record">
+          <form className="grid gap-4 md:grid-cols-2" onSubmit={addTraining}>
+            <EmployeeSelect employees={employees} name="employeeId" />
+            <Input defaultValue="Annual training" label="Course Name" name="courseName" />
+            <Input label="Provider" name="provider" />
+            <Input defaultValue={new Date().toISOString().slice(0, 10)} label="Training Date" name="trainingDate" type="date" />
+            <Input defaultValue="1" label="Hours" name="hours" type="number" />
+            <label className="grid gap-1 text-sm font-medium">
+              Delivery Type
+              <select className={fieldClass()} name="trainingDeliveryType">
+                <option value="ONLINE">Online</option>
+                <option value="INSTRUCTOR_LED">Instructor Led</option>
+                <option value="SELF_STUDY">Self Study</option>
+                <option value="IN_PERSON">In Person</option>
+                <option value="OTHER">Other</option>
+              </select>
+            </label>
+            <div className="md:col-span-2">
+              <Submit disabled={!canEdit} icon={GraduationCap}>Save Training</Submit>
+            </div>
+          </form>
+        </Panel>
+      ) : null}
+
+      {activeTab === "certifications" ? (
+        <Panel title="CPR / First Aid Tracking">
+          <form className="grid gap-4 md:grid-cols-2" onSubmit={saveCertification}>
+            <EmployeeSelect employees={employees} name="employeeId" />
+            <label className="grid gap-1 text-sm font-medium">
+              Certification
+              <select className={fieldClass()} name="certificationType">
+                <option value="CPR">CPR</option>
+                <option value="FIRST_AID">First Aid</option>
+              </select>
+            </label>
+            <Input label="Provider" name="provider" />
+            <Input label="Certificate Number" name="certificateNumber" />
+            <Input label="Issue Date" name="issueDate" type="date" />
+            <Input label="Expiration Date" name="expirationDate" type="date" />
+            <div className="md:col-span-2">
+              <Submit disabled={!canEdit} icon={BadgeCheck}>Save Certification</Submit>
+            </div>
+          </form>
+        </Panel>
+      ) : null}
+
+      {activeTab === "documents" ? (
+        <Panel title="Document Library">
+          <div className="grid gap-3">
+            {documents.map((document) => (
+              <article className="grid gap-3 rounded-lg border border-[#e1e6dc] bg-white p-4 md:grid-cols-[1fr_auto]" key={document.id}>
+                <div>
+                  <h3 className="font-semibold">{document.documentType}</h3>
+                  <p className="text-sm text-[#66705f]">
+                    {document.fileName} · {Math.ceil(document.fileSize / 1024)} KB ·{" "}
+                    {document.employee ? `${document.employee.firstName} ${document.employee.lastName}` : "Unassigned"}
+                  </p>
+                </div>
+                <div className="flex gap-2">
+                  <a className="inline-flex h-9 items-center gap-2 rounded-lg border border-[#cbd5c0] px-3 text-sm font-semibold" href={`/api/documents/${document.id}/download`}>
+                    <Download className="h-4 w-4" aria-hidden />
+                    Download
+                  </a>
+                  <button
+                    className="inline-flex h-9 items-center gap-2 rounded-lg border border-[#e7c7bd] px-3 text-sm font-semibold text-[#9a432d]"
+                    disabled={!canEdit}
+                    onClick={() => archiveDocument(document.id)}
+                    type="button"
+                  >
+                    Archive
+                  </button>
+                </div>
+              </article>
+            ))}
+          </div>
+        </Panel>
+      ) : null}
+
+      {activeTab === "imports" ? (
+        <Panel title="Workbook Import Review">
+          <div className="flex flex-wrap gap-2">
+            <input accept=".csv,.tsv,text/csv,text/tab-separated-values" className="rounded-lg border border-[#d9dfd1] bg-white px-3 py-2 text-sm" ref={importFileRef} type="file" />
+            <button className="inline-flex h-10 items-center gap-2 rounded-lg bg-[#224433] px-3 text-sm font-semibold text-white" disabled={!canEdit} onClick={uploadImport} type="button">
+              <Upload className="h-4 w-4" aria-hidden />
+              Stage Workbook
+            </button>
+          </div>
+          <div className="mt-5 grid gap-4">
+            {imports.map((batch) => (
+              <article className="rounded-lg border border-[#e1e6dc] bg-white p-4" key={batch.id}>
+                <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                  <div>
+                    <h3 className="font-semibold">{batch.fileName}</h3>
+                    <p className="text-sm text-[#66705f]">
+                      {batch.status} · {batch.validRowCount} ready · {batch.errorRowCount} errors · {batch.rowCount} rows
+                    </p>
+                  </div>
+                  <button className="h-9 rounded-lg bg-[#224433] px-3 text-sm font-semibold text-white disabled:opacity-60" disabled={!canEdit || batch.status === "COMMITTED" || batch.validRowCount === 0} onClick={() => commitImport(batch.id)} type="button">
+                    Commit Ready Rows
+                  </button>
+                </div>
+                <div className="mt-4 max-h-80 overflow-auto rounded-lg border border-[#edf0e8]">
+                  <table className="w-full text-left text-sm">
+                    <thead className="bg-[#f7f8f5] text-xs uppercase text-[#66705f]">
+                      <tr>
+                        <th className="px-3 py-2">Row</th>
+                        <th className="px-3 py-2">Name</th>
+                        <th className="px-3 py-2">Role</th>
+                        <th className="px-3 py-2">Status</th>
+                        <th className="px-3 py-2">Issues</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {batch.rows.map((row) => (
+                        <tr className="border-t border-[#edf0e8]" key={row.id}>
+                          <td className="px-3 py-2">{row.rowNumber}</td>
+                          <td className="px-3 py-2">{row.mapped.firstName} {row.mapped.lastName}</td>
+                          <td className="px-3 py-2">{row.mapped.role}</td>
+                          <td className="px-3 py-2">{row.status}</td>
+                          <td className="px-3 py-2 text-[#9a432d]">{row.errors?.join(" ")}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </article>
+            ))}
+          </div>
+        </Panel>
+      ) : null}
+
+      {activeTab === "settings" ? (
+        <Panel title="Compliance Rule Admin">
+          <div className="grid gap-4 md:grid-cols-2">
+            {ruleSets.flatMap((ruleSet) =>
+              ruleSet.requirements.map((requirement) => (
+                <form className="rounded-lg border border-[#e1e6dc] bg-white p-4" key={requirement.id} onSubmit={updateRequirement}>
+                  <input name="jobRoleId" type="hidden" value={requirement.jobRoleId} />
+                  <h3 className="font-semibold">{requirement.jobRole.name}</h3>
+                  <div className="mt-3 grid gap-3">
+                    <Input defaultValue={String(requirement.requiredHours)} label="Annual Hours" name="requiredHours" type="number" />
+                    <Input defaultValue={String(requirement.minimumInstructorLedHours ?? 0)} label="Instructor-Led Hours" name="minimumInstructorLedHours" type="number" />
+                  </div>
+                  <div className="mt-4">
+                    <Submit disabled={!canEdit} icon={Save}>Save Rule</Submit>
+                  </div>
+                </form>
+              )),
+            )}
+          </div>
+        </Panel>
+      ) : null}
+    </div>
+  );
+}
+
+function Panel({ children, title }: { children: React.ReactNode; title: string }) {
+  return (
+    <section className="rounded-lg border border-[#d9dfd1] bg-white p-5 shadow-sm">
+      <h2 className="text-lg font-semibold">{title}</h2>
+      <div className="mt-4">{children}</div>
+    </section>
+  );
+}
+
+function Input({
+  defaultValue = "",
+  label,
+  name,
+  type = "text",
+}: {
+  defaultValue?: string;
+  label: string;
+  name: string;
+  type?: string;
+}) {
+  return (
+    <label className="grid gap-1 text-sm font-medium">
+      {label}
+      <input className={fieldClass()} defaultValue={defaultValue} name={name} type={type} />
+    </label>
+  );
+}
+
+function EmployeeSelect({ employees, name }: { employees: Employee[]; name: string }) {
+  return (
+    <label className="grid gap-1 text-sm font-medium">
+      Employee
+      <select className={fieldClass()} name={name}>
+        {employees.map((employee) => (
+          <option key={employee.id} value={employee.id}>
+            {employee.name}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
+}
+
+function Submit({
+  children,
+  disabled,
+  icon: Icon,
+}: {
+  children: React.ReactNode;
+  disabled?: boolean;
+  icon: typeof Save;
+}) {
+  return (
+    <button
+      className="inline-flex h-10 items-center gap-2 rounded-lg bg-[#224433] px-3 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60"
+      disabled={disabled}
+      type="submit"
+    >
+      <Icon className="h-4 w-4" aria-hidden />
+      {children}
+    </button>
+  );
+}

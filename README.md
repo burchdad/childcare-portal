@@ -89,6 +89,8 @@ upload their own documents.
 - `/api/employees/[id]` for profile read, update, and soft remove
 - `/api/training` for separate approved training records
 - `/api/certifications` for CPR/First Aid certificate upserts
+- `/api/documents` for document library metadata and archive actions
+- `/api/documents/[id]/download` for permission-checked private Blob downloads
 - `/api/documents/upload` for private Blob uploads with document metadata
 - `/api/compliance-rules` for configurable annual and instructor-led hours
 - `/api/imports/workbook` for CSV/TSV workbook staging
@@ -97,6 +99,11 @@ upload their own documents.
 
 Employee profile pages live at `/employees/[id]` and include overview,
 training, certifications, documents, compliance, and activity sections.
+
+The `/operations` workspace provides director/admin UI for employee edits,
+terminations, profile navigation, training record entry, CPR/First Aid updates,
+document downloads/archive actions, workbook staging/commit, and compliance
+rule edits.
 
 ## Current Product Slice
 
@@ -107,6 +114,8 @@ training, certifications, documents, compliance, and activity sections.
 - Signed login with role-aware API permission checks
 - Employee profile pages with training, certification, document, compliance,
   and activity sections
+- Operations workspace for employee, training, certification, document, import,
+  and compliance settings workflows
 - Workbook import staging before commit
 - Compliance engine with explicit `UNKNOWN` handling
 - Prisma data model for organizations, locations, RBAC, employees, rule sets,
