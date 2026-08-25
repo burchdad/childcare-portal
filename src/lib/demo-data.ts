@@ -20,7 +20,7 @@ export const employees: DemoEmployee[] = [
   {
     id: "emp-101",
     name: "Jane Smith",
-    location: "Tyler Center",
+    location: "Kilgore, Texas",
     role: "Caregiver",
     requiredHours: 24,
     completedHours: 16,
@@ -33,7 +33,7 @@ export const employees: DemoEmployee[] = [
   {
     id: "emp-102",
     name: "Mike Jones",
-    location: "Tyler Center",
+    location: "Kilgore, Texas",
     role: "Assistant Director",
     requiredHours: 24,
     completedHours: 22,
@@ -46,7 +46,7 @@ export const employees: DemoEmployee[] = [
   {
     id: "emp-103",
     name: "Sarah Alvarez",
-    location: "Longview Center",
+    location: "Kilgore, Texas",
     role: "Caregiver",
     requiredHours: 24,
     completedHours: 26,
@@ -59,7 +59,7 @@ export const employees: DemoEmployee[] = [
   {
     id: "emp-104",
     name: "Milly Jacobs",
-    location: "Tyler Center",
+    location: "Kilgore, Texas",
     role: "Director",
     requiredHours: 30,
     completedHours: 29,
@@ -72,7 +72,7 @@ export const employees: DemoEmployee[] = [
   {
     id: "emp-105",
     name: "Abigail Stroman",
-    location: "Longview Center",
+    location: "Kilgore, Texas",
     role: "Caregiver",
     requiredHours: 24,
     completedHours: 18,
@@ -104,7 +104,7 @@ export const dashboardMetrics = {
 export const activityItems = [
   {
     id: "activity-001",
-    message: "Sarah Jones approved 12 bulk training records for Tyler Center.",
+    message: "Sarah Jones approved 12 bulk training records for Kilgore, Texas.",
   },
   {
     id: "activity-002",

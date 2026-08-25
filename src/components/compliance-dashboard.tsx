@@ -56,7 +56,7 @@ const navItems = [
   { label: "Audit", icon: LockKeyhole },
 ] as const;
 
-const locations = ["Tyler Center", "Longview Center"];
+const locations = ["Kilgore, Texas"];
 const roles = ["Caregiver", "Assistant Director", "Director", "Cook", "Substitute"];
 const fieldClass = "h-10 rounded-lg border border-[#d9dfd1] px-3 font-normal outline-none";
 
@@ -123,7 +123,7 @@ function createEmployeeImportTemplate() {
   ];
   const example = [
     "Jordan Lee",
-    "Tyler Center",
+    "Kilgore, Texas",
     "Caregiver",
     6,
     24,
@@ -628,7 +628,7 @@ export function ComplianceDashboard() {
                   type="button"
                 >
                   <Filter className="h-3.5 w-3.5" aria-hidden />
-                  {location}
+                  {location === "All Locations" ? "All Locations" : "Kilgore Site"}
                 </button>
               ))}
               <select
