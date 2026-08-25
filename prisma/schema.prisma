@@ -1,0 +1,398 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum OrganizationStatus {
+  ACTIVE
+  SUSPENDED
+  ARCHIVED
+}
+
+enum EmploymentStatus {
+  ACTIVE
+  LEAVE
+  TERMINATED
+  FUTURE_HIRE
+}
+
+enum UserRole {
+  PLATFORM_ADMIN
+  ORG_OWNER
+  CORPORATE_ADMIN
+  LOCATION_DIRECTOR
+  ASSISTANT_DIRECTOR
+  COMPLIANCE_MANAGER
+  EMPLOYEE
+  AUDITOR
+}
+
+enum RequirementType {
+  ANNUAL_TRAINING
+  INSTRUCTOR_LED
+  CPR
+  FIRST_AID
+  ADMINISTRATION
+  CHILD_SAFETY
+  MALTREATMENT
+  ORIENTATION
+  TRANSPORTATION
+  FOOD_SAFETY
+  OTHER
+}
+
+enum TrainingDeliveryType {
+  ONLINE
+  INSTRUCTOR_LED
+  SELF_STUDY
+  IN_PERSON
+  OTHER
+}
+
+enum ReviewStatus {
+  DRAFT
+  SUBMITTED
+  APPROVED
+  REJECTED
+  VOID
+}
+
+enum CertificationType {
+  CPR
+  FIRST_AID
+  FOOD_HANDLER
+  DIRECTOR_CREDENTIAL
+  CDA
+  OTHER
+}
+
+enum CertificationStatus {
+  VALID
+  EXPIRING
+  EXPIRED
+  MISSING
+}
+
+enum AlertSeverity {
+  INFO
+  ATTENTION
+  AT_RISK
+  OVERDUE
+  CRITICAL
+}
+
+model Organization {
+  id               String             @id @default(cuid())
+  name             String
+  legalName        String?
+  timezone         String             @default("America/Chicago")
+  status           OrganizationStatus @default(ACTIVE)
+  subscriptionPlan String             @default("starter")
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
+
+  locations       Location[]
+  users           UserProfile[]
+  roles           JobRole[]
+  employees       Employee[]
+  ruleSets        ComplianceRuleSet[]
+  courses         TrainingCourse[]
+  trainingRecords EmployeeTrainingRecord[]
+  certifications  Certification[]
+  documents       Document[]
+  auditLogs       AuditLog[]
+  alerts          Alert[]
+
+  @@map("organizations")
+}
+
+model Location {
+  id             String   @id @default(cuid())
+  organizationId String
+  name           String
+  licenseNumber  String?
+  address        String?
+  city           String?
+  state          String?
+  zip            String?
+  phone          String?
+  timezone       String   @default("America/Chicago")
+  status         String   @default("ACTIVE")
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization  @relation(fields: [organizationId], references: [id])
+  employees    Employee[]
+  userRoles    UserRoleAssignment[]
+  alerts       Alert[]
+
+  @@index([organizationId])
+  @@map("locations")
+}
+
+model UserProfile {
+  id             String    @id @default(cuid())
+  organizationId String
+  employeeId     String?
+  firstName      String
+  lastName       String
+  email          String    @unique
+  phone          String?
+  status         String    @default("ACTIVE")
+  lastLogin      DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  organization Organization         @relation(fields: [organizationId], references: [id])
+  employee     Employee?            @relation(fields: [employeeId], references: [id])
+  roles        UserRoleAssignment[]
+  auditLogs    AuditLog[]
+
+  @@index([organizationId])
+  @@map("user_profiles")
+}
+
+model UserRoleAssignment {
+  id             String   @id @default(cuid())
+  userId         String
+  organizationId String
+  locationId     String?
+  role           UserRole
+  createdAt      DateTime @default(now())
+
+  user     UserProfile @relation(fields: [userId], references: [id])
+  location Location?   @relation(fields: [locationId], references: [id])
+
+  @@index([organizationId, locationId, role])
+  @@map("user_roles")
+}
+
+model JobRole {
+  id             String   @id @default(cuid())
+  organizationId String
+  name           String
+  description    String?
+  active         Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization            @relation(fields: [organizationId], references: [id])
+  employees    Employee[]
+  requirements ComplianceRequirement[]
+
+  @@unique([organizationId, name])
+  @@map("job_roles")
+}
+
+model Employee {
+  id                      String           @id @default(cuid())
+  organizationId          String
+  primaryLocationId       String?
+  employeeNumber          String?
+  firstName               String
+  middleName              String?
+  lastName                String
+  email                   String?
+  phone                   String?
+  hireDate                DateTime
+  terminationDate         DateTime?
+  employmentStatus        EmploymentStatus @default(ACTIVE)
+  jobRoleId               String
+  annualTrainingCycleType String           @default("HIRE_ANNIVERSARY")
+  annualTrainingDueDate   DateTime?
+  notes                   String?
+  createdAt               DateTime         @default(now())
+  updatedAt               DateTime         @updatedAt
+
+  organization    Organization             @relation(fields: [organizationId], references: [id])
+  primaryLocation Location?                @relation(fields: [primaryLocationId], references: [id])
+  jobRole         JobRole                  @relation(fields: [jobRoleId], references: [id])
+  userProfiles    UserProfile[]
+  trainingRecords EmployeeTrainingRecord[]
+  certifications  Certification[]
+  documents       Document[]
+  alerts          Alert[]
+
+  @@index([organizationId, primaryLocationId])
+  @@index([organizationId, employmentStatus])
+  @@map("employees")
+}
+
+model ComplianceRuleSet {
+  id             String    @id @default(cuid())
+  organizationId String
+  name           String
+  jurisdiction   String
+  effectiveDate  DateTime
+  expirationDate DateTime?
+  version        String
+  active         Boolean   @default(true)
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  organization Organization            @relation(fields: [organizationId], references: [id])
+  requirements ComplianceRequirement[]
+
+  @@index([organizationId, active])
+  @@map("compliance_rule_sets")
+}
+
+model ComplianceRequirement {
+  id                           String          @id @default(cuid())
+  ruleSetId                    String
+  jobRoleId                    String
+  requirementType              RequirementType
+  requiredHours                Decimal?        @db.Decimal(5, 2)
+  trainingCategory             String?
+  minimumInstructorLedHours    Decimal?        @db.Decimal(5, 2)
+  frequency                    String          @default("ANNUAL")
+  renewalPeriodMonths          Int?
+  required                     Boolean         @default(true)
+  createdAt                    DateTime        @default(now())
+  updatedAt                    DateTime        @updatedAt
+
+  ruleSet ComplianceRuleSet @relation(fields: [ruleSetId], references: [id])
+  jobRole JobRole           @relation(fields: [jobRoleId], references: [id])
+
+  @@index([ruleSetId, jobRoleId])
+  @@map("compliance_requirements")
+}
+
+model TrainingCourse {
+  id                 String               @id @default(cuid())
+  organizationId     String
+  courseName         String
+  provider           String?
+  description        String?
+  defaultHours       Decimal              @db.Decimal(5, 2)
+  trainingType       TrainingDeliveryType
+  competencyCategory String?
+  approvalStatus     ReviewStatus         @default(APPROVED)
+  active             Boolean              @default(true)
+  createdAt          DateTime             @default(now())
+  updatedAt          DateTime             @updatedAt
+
+  organization Organization             @relation(fields: [organizationId], references: [id])
+  records      EmployeeTrainingRecord[]
+
+  @@index([organizationId, active])
+  @@map("training_courses")
+}
+
+model EmployeeTrainingRecord {
+  id                   String               @id @default(cuid())
+  organizationId       String
+  employeeId           String
+  courseId             String?
+  courseNameSnapshot   String
+  providerSnapshot     String?
+  trainingDate         DateTime
+  hours                Decimal              @db.Decimal(5, 2)
+  trainingDeliveryType TrainingDeliveryType
+  competencyCategory   String?
+  status               ReviewStatus         @default(SUBMITTED)
+  submittedBy          String?
+  approvedBy           String?
+  approvedAt           DateTime?
+  notes                String?
+  createdAt            DateTime             @default(now())
+  updatedAt            DateTime             @updatedAt
+
+  organization Organization    @relation(fields: [organizationId], references: [id])
+  employee     Employee        @relation(fields: [employeeId], references: [id])
+  course       TrainingCourse? @relation(fields: [courseId], references: [id])
+
+  @@index([organizationId, employeeId, status])
+  @@map("employee_training_records")
+}
+
+model Certification {
+  id                String              @id @default(cuid())
+  organizationId    String
+  employeeId        String
+  certificationType CertificationType
+  provider          String?
+  certificateNumber String?
+  issueDate         DateTime?
+  expirationDate    DateTime?
+  status            CertificationStatus @default(MISSING)
+  documentId        String?
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  employee     Employee     @relation(fields: [employeeId], references: [id])
+  document     Document?    @relation(fields: [documentId], references: [id])
+
+  @@index([organizationId, employeeId, certificationType])
+  @@map("certifications")
+}
+
+model Document {
+  id             String   @id @default(cuid())
+  organizationId String
+  employeeId     String?
+  documentType   String
+  fileName       String
+  storagePath    String
+  mimeType       String
+  fileSize       Int
+  uploadedBy     String?
+  uploadedAt     DateTime @default(now())
+  archivedAt     DateTime?
+
+  organization   Organization    @relation(fields: [organizationId], references: [id])
+  employee       Employee?       @relation(fields: [employeeId], references: [id])
+  certifications Certification[]
+
+  @@index([organizationId, employeeId])
+  @@map("documents")
+}
+
+model Alert {
+  id              String        @id @default(cuid())
+  organizationId  String
+  employeeId      String?
+  locationId      String?
+  alertType       String
+  severity        AlertSeverity
+  title           String
+  message         String
+  dueDate         DateTime?
+  status          String        @default("OPEN")
+  acknowledgedBy  String?
+  acknowledgedAt  DateTime?
+  createdAt       DateTime      @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  employee     Employee?    @relation(fields: [employeeId], references: [id])
+  location     Location?    @relation(fields: [locationId], references: [id])
+
+  @@index([organizationId, status, severity])
+  @@map("alerts")
+}
+
+model AuditLog {
+  id             String   @id @default(cuid())
+  organizationId String
+  userId         String?
+  action         String
+  entityType     String
+  entityId       String
+  oldValues      Json?
+  newValues      Json?
+  reason         String?
+  ipAddress      String?
+  userAgent      String?
+  createdAt      DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  user         UserProfile? @relation(fields: [userId], references: [id])
+
+  @@index([organizationId, entityType, entityId])
+  @@map("audit_logs")
+}
