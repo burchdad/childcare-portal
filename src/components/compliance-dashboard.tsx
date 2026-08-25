@@ -285,6 +285,7 @@ export function ComplianceDashboard() {
   const [dueSoonOnly, setDueSoonOnly] = useState(false);
   const [query, setQuery] = useState("");
   const [modal, setModal] = useState<ModalName>(null);
+  const [uploading, setUploading] = useState(false);
   const [selectedEmployeeId, setSelectedEmployeeId] = useState(
     initialEmployees[0]?.id ?? "",
   );
@@ -445,17 +446,50 @@ export function ComplianceDashboard() {
     event.currentTarget.reset();
   }
 
-  function handleUpload(event: FormEvent<HTMLFormElement>) {
+  async function handleUpload(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
     const employeeId = String(form.get("employeeId"));
     const documentName = String(form.get("documentName") ?? "Certificate").trim();
+    const file = form.get("file");
     const employeeName =
       rows.find((employee) => employee.id === employeeId)?.name ?? "Employee";
 
-    addActivity(`${documentName || "Certificate"} was uploaded for ${employeeName}.`);
-    setModal(null);
-    event.currentTarget.reset();
+    if (!(file instanceof File) || file.size === 0) {
+      addActivity("Document upload needs a selected file.");
+      return;
+    }
+
+    setUploading(true);
+
+    try {
+      const response = await fetch("/api/documents/upload", {
+        method: "POST",
+        body: form,
+      });
+      const result = (await response.json()) as {
+        document?: { id: string };
+        error?: string;
+      };
+
+      if (!response.ok) {
+        throw new Error(result.error ?? "Document upload failed.");
+      }
+
+      addActivity(
+        `${documentName || "Certificate"} was uploaded and audited for ${employeeName}.`,
+      );
+      setModal(null);
+      event.currentTarget.reset();
+    } catch (error) {
+      addActivity(
+        `Upload failed for ${employeeName}: ${
+          error instanceof Error ? error.message : "Unknown upload error."
+        }`,
+      );
+    } finally {
+      setUploading(false);
+    }
   }
 
   async function handleImportFile() {
@@ -1088,9 +1122,17 @@ export function ComplianceDashboard() {
             </label>
             <label className="grid gap-1 text-sm font-medium">
               File
-              <input className="rounded-lg border border-[#d9dfd1] px-3 py-2 font-normal" type="file" />
+              <input
+                accept=".pdf,.png,.jpg,.jpeg,.doc,.docx,image/*,application/pdf"
+                className="rounded-lg border border-[#d9dfd1] px-3 py-2 font-normal"
+                name="file"
+                required
+                type="file"
+              />
             </label>
-            <SubmitButton icon={Upload}>Upload</SubmitButton>
+            <SubmitButton disabled={uploading} icon={Upload}>
+              {uploading ? "Uploading..." : "Upload"}
+            </SubmitButton>
           </form>
         </Modal>
       ) : null}
@@ -1735,14 +1777,17 @@ function DateField({
 
 function SubmitButton({
   children,
+  disabled = false,
   icon: Icon,
 }: {
   children: React.ReactNode;
+  disabled?: boolean;
   icon: typeof Plus;
 }) {
   return (
     <button
-      className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-[#224433] px-3 text-sm font-semibold text-white"
+      className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-[#224433] px-3 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-70"
+      disabled={disabled}
       type="submit"
     >
       <Icon className="h-4 w-4" aria-hidden />
