@@ -60,6 +60,14 @@ const employees = [
   },
 ];
 
+const trainingTotals = {
+  "emp-101": { annual: 16, instructorLed: 3 },
+  "emp-102": { annual: 22, instructorLed: 5 },
+  "emp-103": { annual: 26, instructorLed: 6 },
+  "emp-104": { annual: 29, instructorLed: 7 },
+  "emp-105": { annual: 18, instructorLed: 2 },
+};
+
 function date(value) {
   return value ? new Date(`${value}T12:00:00-05:00`) : null;
 }
@@ -220,6 +228,126 @@ async function main() {
         },
       });
     }
+
+    const totals = trainingTotals[employee.id];
+    if (totals) {
+      await prisma.employeeTrainingRecord.upsert({
+        where: { id: `training-${employee.id}-annual` },
+        update: {
+          hours: totals.annual,
+          status: "APPROVED",
+          trainingDeliveryType: "ONLINE",
+        },
+        create: {
+          id: `training-${employee.id}-annual`,
+          organizationId,
+          employeeId: employee.id,
+          courseNameSnapshot: "Seeded annual training history",
+          trainingDate: date("2026-08-01"),
+          hours: totals.annual,
+          trainingDeliveryType: "ONLINE",
+          status: "APPROVED",
+          approvedAt: new Date(),
+        },
+      });
+
+      await prisma.employeeTrainingRecord.upsert({
+        where: { id: `training-${employee.id}-instructor` },
+        update: {
+          hours: totals.instructorLed,
+          status: "APPROVED",
+          trainingDeliveryType: "INSTRUCTOR_LED",
+        },
+        create: {
+          id: `training-${employee.id}-instructor`,
+          organizationId,
+          employeeId: employee.id,
+          courseNameSnapshot: "Seeded instructor-led training history",
+          trainingDate: date("2026-08-15"),
+          hours: totals.instructorLed,
+          trainingDeliveryType: "INSTRUCTOR_LED",
+          status: "APPROVED",
+          approvedAt: new Date(),
+        },
+      });
+    }
+  }
+
+  const director = await prisma.userProfile.upsert({
+    where: { email: "director@ghostaisolutions.com" },
+    update: {
+      firstName: "Sarah",
+      lastName: "Jones",
+      organizationId,
+      status: "ACTIVE",
+    },
+    create: {
+      id: "user-director",
+      organizationId,
+      firstName: "Sarah",
+      lastName: "Jones",
+      email: "director@ghostaisolutions.com",
+      status: "ACTIVE",
+    },
+  });
+
+  const auditor = await prisma.userProfile.upsert({
+    where: { email: "auditor@ghostaisolutions.com" },
+    update: {
+      firstName: "Taylor",
+      lastName: "Audit",
+      organizationId,
+      status: "ACTIVE",
+    },
+    create: {
+      id: "user-auditor",
+      organizationId,
+      firstName: "Taylor",
+      lastName: "Audit",
+      email: "auditor@ghostaisolutions.com",
+      status: "ACTIVE",
+    },
+  });
+
+  const jane = await prisma.userProfile.upsert({
+    where: { email: "jane.smith@ghostaisolutions.com" },
+    update: {
+      firstName: "Jane",
+      lastName: "Smith",
+      organizationId,
+      employeeId: "emp-101",
+      status: "ACTIVE",
+    },
+    create: {
+      id: "user-jane-smith",
+      organizationId,
+      employeeId: "emp-101",
+      firstName: "Jane",
+      lastName: "Smith",
+      email: "jane.smith@ghostaisolutions.com",
+      status: "ACTIVE",
+    },
+  });
+
+  for (const assignment of [
+    { id: "assignment-director", userId: director.id, role: "LOCATION_DIRECTOR" },
+    { id: "assignment-auditor", userId: auditor.id, role: "AUDITOR" },
+    { id: "assignment-jane", userId: jane.id, role: "EMPLOYEE" },
+  ]) {
+    await prisma.userRoleAssignment.upsert({
+      where: { id: assignment.id },
+      update: {
+        role: assignment.role,
+        locationId,
+      },
+      create: {
+        id: assignment.id,
+        userId: assignment.userId,
+        organizationId,
+        locationId,
+        role: assignment.role,
+      },
+    });
   }
 
   await prisma.auditLog.create({

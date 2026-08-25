@@ -1,11 +1,11 @@
 import { del, put } from "@vercel/blob";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { organizationScope, requireRole } from "@/lib/server/auth";
 
 export const runtime = "nodejs";
 
 const MAX_DOCUMENT_SIZE = 25 * 1024 * 1024;
-const DEFAULT_ORGANIZATION_ID = "org-ghost-kilgore";
 
 function cleanPathPart(value: string) {
   return value
@@ -24,11 +24,23 @@ export async function POST(request: Request) {
     return errorResponse("DATABASE_URL is required before document metadata can be saved.", 503);
   }
 
+  const session = await requireRole([
+    "PLATFORM_ADMIN",
+    "ORG_OWNER",
+    "CORPORATE_ADMIN",
+    "LOCATION_DIRECTOR",
+    "ASSISTANT_DIRECTOR",
+    "COMPLIANCE_MANAGER",
+    "EMPLOYEE",
+  ]);
+  if ("error" in session) {
+    return session.error;
+  }
+
   const form = await request.formData();
   const file = form.get("file");
   const employeeId = String(form.get("employeeId") ?? "").trim();
   const documentType = String(form.get("documentName") ?? "Training certificate").trim();
-  const uploadedBy = String(form.get("uploadedBy") ?? "Dashboard user").trim();
 
   if (!(file instanceof File) || file.size === 0) {
     return errorResponse("Choose a document file before uploading.", 400);
@@ -45,11 +57,19 @@ export async function POST(request: Request) {
       })
     : null;
 
+  if (
+    session.user.roles.includes("EMPLOYEE") &&
+    !session.user.roles.some((role) => role !== "EMPLOYEE") &&
+    session.user.employeeId !== employeeId
+  ) {
+    return errorResponse("Employees can only upload their own documents.", 403);
+  }
+
   if (employeeId && !employee) {
     return errorResponse("That employee is not in the production roster yet. Run the seed script or add the employee first.", 404);
   }
 
-  const organizationId = employee?.organizationId ?? DEFAULT_ORGANIZATION_ID;
+  const organizationId = employee?.organizationId ?? organizationScope(session.user);
   const safeEmployee = cleanPathPart(employeeId || "unassigned");
   const safeName = cleanPathPart(file.name || "document");
   const pathname = `organizations/${organizationId}/employees/${safeEmployee}/${Date.now()}-${safeName}`;
@@ -71,13 +91,14 @@ export async function POST(request: Request) {
         storagePath: blob.pathname,
         mimeType: file.type || "application/octet-stream",
         fileSize: file.size,
-        uploadedBy: uploadedBy || "Dashboard user",
+        uploadedBy: session.user.id,
       },
     });
 
     await prisma.auditLog.create({
       data: {
         organizationId,
+        userId: session.user.id,
         action: "DOCUMENT_UPLOADED",
         entityType: "Document",
         entityId: document.id,

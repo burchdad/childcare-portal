@@ -1,6 +1,7 @@
 "use client";
 
-import { FormEvent, useMemo, useRef, useState } from "react";
+import Link from "next/link";
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertTriangle,
   Bell,
@@ -36,6 +37,11 @@ type SectionName = "Dashboard" | "Employees" | "Training" | "Documents" | "Alert
 type ActivityItem = (typeof activityItems)[number];
 type EmployeeRow = DemoEmployee & {
   compliance: ReturnType<typeof evaluateEmployeeCompliance>;
+};
+type ApiEmployee = DemoEmployee & {
+  annualDueDate?: string;
+  cprExpirationDate?: string;
+  firstAidExpirationDate?: string;
 };
 
 const statusStyles: Record<ComplianceStatus, string> = {
@@ -197,6 +203,19 @@ function parseNumberCell(value: string, fallback: number) {
   return Number.isFinite(parsed) ? parsed : fallback;
 }
 
+function normalizeApiEmployee(employee: ApiEmployee): DemoEmployee {
+  return {
+    ...employee,
+    annualDueDate: employee.annualDueDate ? new Date(employee.annualDueDate) : undefined,
+    cprExpirationDate: employee.cprExpirationDate
+      ? new Date(employee.cprExpirationDate)
+      : undefined,
+    firstAidExpirationDate: employee.firstAidExpirationDate
+      ? new Date(employee.firstAidExpirationDate)
+      : undefined,
+  };
+}
+
 function csvToEmployees(text: string) {
   const [headers, ...records] = parseCsv(text);
   const normalizedHeaders = headers.map((header) => header.trim().toLowerCase());
@@ -291,6 +310,39 @@ export function ComplianceDashboard() {
   );
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  useEffect(() => {
+    let active = true;
+
+    async function loadPersistedEmployees() {
+      try {
+        const response = await fetch("/api/employees");
+        if (!response.ok) {
+          return;
+        }
+
+        const result = (await response.json()) as { employees?: ApiEmployee[] };
+        if (active && result.employees?.length) {
+          setEmployees(result.employees.map(normalizeApiEmployee));
+          setSelectedEmployeeId(result.employees[0].id);
+          setActivities((current) =>
+            [
+              { id: crypto.randomUUID(), message: "Postgres employee roster loaded." },
+              ...current,
+            ].slice(0, 8),
+          );
+        }
+      } catch {
+        // Local demo mode stays usable when auth or database env is not configured.
+      }
+    }
+
+    void loadPersistedEmployees();
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
   const rows = useMemo(() => buildRows(employees), [employees]);
 
   const filteredRows = useMemo(() => {
@@ -375,7 +427,7 @@ export function ComplianceDashboard() {
     );
   }
 
-  function handleAddEmployee(event: FormEvent<HTMLFormElement>) {
+  async function handleAddEmployee(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
     const name = String(form.get("name") ?? "").trim();
@@ -404,19 +456,62 @@ export function ComplianceDashboard() {
         : undefined,
     };
 
-    setEmployees((current) => [...current, employee]);
-    setSelectedEmployeeId(employee.id);
-    addActivity(`${employee.name} was added to ${employee.location}.`);
+    try {
+      const response = await fetch("/api/employees", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name,
+          role,
+          annualDueDate: String(form.get("annualDueDate")),
+        }),
+      });
+      const result = (await response.json()) as { employee?: ApiEmployee; error?: string };
+
+      if (!response.ok || !result.employee) {
+        throw new Error(typeof result.error === "string" ? result.error : "Database add failed.");
+      }
+
+      const persistedEmployee = normalizeApiEmployee(result.employee);
+      setEmployees((current) => [...current, persistedEmployee]);
+      setSelectedEmployeeId(persistedEmployee.id);
+      addActivity(`${persistedEmployee.name} was added to Postgres.`);
+    } catch (error) {
+      setEmployees((current) => [...current, employee]);
+      setSelectedEmployeeId(employee.id);
+      addActivity(
+        `${employee.name} was added locally only: ${
+          error instanceof Error ? error.message : "database unavailable"
+        }`,
+      );
+    }
     setModal(null);
     event.currentTarget.reset();
   }
 
-  function handleRemoveEmployee(employee: EmployeeRow) {
+  async function handleRemoveEmployee(employee: EmployeeRow) {
+    try {
+      const response = await fetch(`/api/employees/${employee.id}`, {
+        method: "DELETE",
+      });
+
+      if (!response.ok) {
+        const result = (await response.json()) as { error?: string };
+        throw new Error(result.error ?? "Database remove failed.");
+      }
+
+      addActivity(`${employee.name} was removed from Postgres monitoring.`);
+    } catch (error) {
+      addActivity(
+        `${employee.name} was removed locally only: ${
+          error instanceof Error ? error.message : "database unavailable"
+        }`,
+      );
+    }
     setEmployees((current) => current.filter((item) => item.id !== employee.id));
-    addActivity(`${employee.name} was removed from active monitoring.`);
   }
 
-  function handleAddTraining(event: FormEvent<HTMLFormElement>) {
+  async function handleAddTraining(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
     const employeeId = String(form.get("employeeId"));
@@ -441,7 +536,31 @@ export function ComplianceDashboard() {
 
     const employeeName =
       rows.find((employee) => employee.id === employeeId)?.name ?? "Employee";
-    addActivity(`${courseName} was approved for ${employeeName} (${hours} hour(s)).`);
+    try {
+      const response = await fetch("/api/training", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          employeeId,
+          courseName,
+          hours,
+          trainingDeliveryType: deliveryType,
+        }),
+      });
+
+      if (!response.ok) {
+        const result = (await response.json()) as { error?: string };
+        throw new Error(typeof result.error === "string" ? result.error : "Database save failed.");
+      }
+
+      addActivity(`${courseName} was approved and saved for ${employeeName} (${hours} hour(s)).`);
+    } catch (error) {
+      addActivity(
+        `${courseName} was added locally for ${employeeName}: ${
+          error instanceof Error ? error.message : "database unavailable"
+        }`,
+      );
+    }
     setModal(null);
     event.currentTarget.reset();
   }
@@ -499,8 +618,8 @@ export function ComplianceDashboard() {
       return;
     }
 
-    if (!file.name.toLowerCase().endsWith(".csv")) {
-      addActivity(`${file.name} was rejected. Import currently accepts CSV roster files.`);
+    if (!file.name.toLowerCase().endsWith(".csv") && !file.name.toLowerCase().endsWith(".tsv")) {
+      addActivity(`${file.name} was rejected. Import currently accepts CSV or TSV roster files.`);
       return;
     }
 
@@ -512,11 +631,39 @@ export function ComplianceDashboard() {
       return;
     }
 
-    setEmployees((current) => [...current, ...result.employees]);
-    setSelectedEmployeeId(result.employees[0].id);
-    addActivity(
-      `${file.name} imported ${result.employees.length} employee(s). ${result.errors.length} warning(s).`,
-    );
+    try {
+      const form = new FormData();
+      form.append("file", file);
+      const response = await fetch("/api/imports/workbook", {
+        method: "POST",
+        body: form,
+      });
+      const staged = (await response.json()) as {
+        batch?: {
+          id: string;
+          rowCount: number;
+          validRowCount: number;
+          errorRowCount: number;
+        };
+        error?: string;
+      };
+
+      if (!response.ok || !staged.batch) {
+        throw new Error(staged.error ?? "Workbook staging failed.");
+      }
+
+      addActivity(
+        `${file.name} staged for review: ${staged.batch.validRowCount} ready, ${staged.batch.errorRowCount} with issues.`,
+      );
+    } catch (error) {
+      setEmployees((current) => [...current, ...result.employees]);
+      setSelectedEmployeeId(result.employees[0].id);
+      addActivity(
+        `${file.name} added locally only: ${
+          error instanceof Error ? error.message : "staging unavailable"
+        }`,
+      );
+    }
     setModal(null);
     if (fileInputRef.current) {
       fileInputRef.current.value = "";
@@ -647,6 +794,13 @@ export function ComplianceDashboard() {
                   <GraduationCap className="h-4 w-4" aria-hidden />
                   Add Training
                 </button>
+                <Link
+                  className="inline-flex h-10 items-center gap-2 rounded-lg border border-[#cbd5c0] bg-white px-3 text-sm font-medium text-[#2f3a34] shadow-sm transition hover:bg-[#f3f6ef]"
+                  href="/login"
+                >
+                  <LockKeyhole className="h-4 w-4" aria-hidden />
+                  Sign In
+                </Link>
               </div>
             </div>
             <div className="flex flex-wrap gap-2 text-sm">
@@ -1145,7 +1299,7 @@ export function ComplianceDashboard() {
               employee roster and compliance is recalculated immediately.
             </p>
             <input
-              accept=".csv,text/csv"
+              accept=".csv,.tsv,text/csv,text/tab-separated-values"
               className="rounded-lg border border-[#d9dfd1] px-3 py-2"
               ref={fileInputRef}
               type="file"
@@ -1591,7 +1745,9 @@ function EmployeeTable({
           {employees.map((employee) => (
             <tr className="hover:bg-[#fafbf7]" key={employee.id}>
               <td className="px-3 py-4 align-top">
-                <p className="font-medium text-[#18211d]">{employee.name}</p>
+                <Link className="font-medium text-[#18211d] hover:text-[#224433]" href={`/employees/${employee.id}`}>
+                  {employee.name}
+                </Link>
                 <p className="text-[#6b735f]">{employee.role}</p>
               </td>
               <td className="px-3 py-4 align-top text-[#425148]">{employee.location}</td>
@@ -1650,7 +1806,9 @@ function EmployeeCard({
     <article className="rounded-lg border border-[#e1e6dc] bg-[#fffdf7] p-4">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <h3 className="font-semibold text-[#18211d]">{employee.name}</h3>
+          <Link className="font-semibold text-[#18211d] hover:text-[#224433]" href={`/employees/${employee.id}`}>
+            {employee.name}
+          </Link>
           <p className="text-sm text-[#66705f]">
             {employee.role} · {employee.location}
           </p>

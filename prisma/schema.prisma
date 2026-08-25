@@ -106,6 +106,7 @@ model Organization {
   documents       Document[]
   auditLogs       AuditLog[]
   alerts          Alert[]
+  importBatches   WorkbookImportBatch[]
 
   @@map("organizations")
 }
@@ -395,4 +396,39 @@ model AuditLog {
 
   @@index([organizationId, entityType, entityId])
   @@map("audit_logs")
+}
+
+model WorkbookImportBatch {
+  id             String   @id @default(cuid())
+  organizationId String
+  fileName       String
+  status         String   @default("STAGED")
+  rowCount       Int      @default(0)
+  validRowCount  Int      @default(0)
+  errorRowCount  Int      @default(0)
+  createdBy      String?
+  createdAt      DateTime @default(now())
+  committedAt    DateTime?
+
+  organization Organization        @relation(fields: [organizationId], references: [id])
+  rows         WorkbookImportRow[]
+
+  @@index([organizationId, status])
+  @@map("workbook_import_batches")
+}
+
+model WorkbookImportRow {
+  id        String   @id @default(cuid())
+  batchId   String
+  rowNumber Int
+  rawValues Json
+  mapped    Json
+  errors    Json?
+  status    String   @default("READY")
+  createdAt DateTime @default(now())
+
+  batch WorkbookImportBatch @relation(fields: [batchId], references: [id])
+
+  @@index([batchId, status])
+  @@map("workbook_import_rows")
 }

@@ -62,12 +62,48 @@ PostgreSQL connection string. The connected Blob store should provide
 `BLOB_STORE_ID` as a system environment variable; add `BLOB_READ_WRITE_TOKEN`
 only if you need the static-token fallback.
 
+Set `NEXTAUTH_SECRET` to a long random value. Set `PORTAL_ACCESS_CODE` to the
+temporary sign-in code for seeded users; local development defaults to `demo`
+when the variable is omitted.
+
+## Auth and Roles
+
+Seeded users:
+
+- `director@ghostaisolutions.com` with `LOCATION_DIRECTOR`
+- `auditor@ghostaisolutions.com` with `AUDITOR`
+- `jane.smith@ghostaisolutions.com` with `EMPLOYEE`
+
+The app uses a signed HTTP-only session cookie. Admin/director/compliance roles
+can manage employees, training, certifications, rules, documents, and imports.
+Auditors can read audit and rule data. Employees can view their own profile and
+upload their own documents.
+
+## Data APIs
+
+- `/api/employees` for persisted employee list and create
+- `/api/employees/[id]` for profile read, update, and soft remove
+- `/api/training` for separate approved training records
+- `/api/certifications` for CPR/First Aid certificate upserts
+- `/api/documents/upload` for private Blob uploads with document metadata
+- `/api/compliance-rules` for configurable annual and instructor-led hours
+- `/api/imports/workbook` for CSV/TSV workbook staging
+- `/api/imports/workbook/[id]/commit` for committing staged rows
+- `/api/audit` for operational audit history
+
+Employee profile pages live at `/employees/[id]` and include overview,
+training, certifications, documents, compliance, and activity sections.
+
 ## Current Product Slice
 
 - Director dashboard with compliance metrics and risk list
 - Employee self-service preview
 - Auditable activity feed
 - Private document uploads backed by Vercel Blob and PostgreSQL metadata
+- Signed login with role-aware API permission checks
+- Employee profile pages with training, certification, document, compliance,
+  and activity sections
+- Workbook import staging before commit
 - Compliance engine with explicit `UNKNOWN` handling
 - Prisma data model for organizations, locations, RBAC, employees, rule sets,
   training records, certifications, documents, alerts, and audit logs
