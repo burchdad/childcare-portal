@@ -17,22 +17,34 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Invalid access code." }, { status: 401 });
   }
 
-  const user = await prisma.userProfile.findUnique({
-    where: { email: String(body.email ?? "").trim().toLowerCase() },
-  });
+  try {
+    const user = await prisma.userProfile.findUnique({
+      where: { email: String(body.email ?? "").trim().toLowerCase() },
+    });
 
-  if (!user || user.status !== "ACTIVE") {
-    return NextResponse.json({ error: "Active user not found." }, { status: 404 });
+    if (!user || user.status !== "ACTIVE") {
+      return NextResponse.json({ error: "Active user not found. Run the seed script against the production database." }, { status: 404 });
+    }
+
+    const response = NextResponse.json({ ok: true });
+    response.cookies.set(SESSION_COOKIE, createSessionToken(user.id), {
+      httpOnly: true,
+      sameSite: "lax",
+      secure: process.env.NODE_ENV === "production",
+      path: "/",
+      maxAge: 60 * 60 * 12,
+    });
+
+    return response;
+  } catch (error) {
+    return NextResponse.json(
+      {
+        error:
+          error instanceof Error
+            ? `Database login check failed: ${error.message}`
+            : "Database login check failed.",
+      },
+      { status: 503 },
+    );
   }
-
-  const response = NextResponse.json({ ok: true });
-  response.cookies.set(SESSION_COOKIE, createSessionToken(user.id), {
-    httpOnly: true,
-    sameSite: "lax",
-    secure: process.env.NODE_ENV === "production",
-    path: "/",
-    maxAge: 60 * 60 * 12,
-  });
-
-  return response;
 }

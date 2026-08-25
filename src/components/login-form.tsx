@@ -19,26 +19,36 @@ export function LoginForm() {
     setError("");
     setLoading(true);
 
-    const form = new FormData(event.currentTarget);
-    const response = await fetch("/api/auth/login", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        email: form.get("email"),
-        accessCode: form.get("accessCode"),
-      }),
-    });
-    const result = (await response.json()) as { error?: string };
+    try {
+      const form = new FormData(event.currentTarget);
+      const response = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: form.get("email"),
+          accessCode: form.get("accessCode"),
+        }),
+      });
+      const result = (await response.json().catch(() => ({
+        error: "The server returned an empty error response.",
+      }))) as { error?: string };
 
-    setLoading(false);
+      if (!response.ok) {
+        setError(result.error ?? "Sign in failed.");
+        return;
+      }
 
-    if (!response.ok) {
-      setError(result.error ?? "Sign in failed.");
-      return;
+      router.push("/");
+      router.refresh();
+    } catch (requestError) {
+      setError(
+        requestError instanceof Error
+          ? requestError.message
+          : "Sign in request could not be completed.",
+      );
+    } finally {
+      setLoading(false);
     }
-
-    router.push("/");
-    router.refresh();
   }
 
   return (

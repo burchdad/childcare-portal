@@ -62,6 +62,10 @@ PostgreSQL connection string. The connected Blob store should provide
 `BLOB_STORE_ID` as a system environment variable; add `BLOB_READ_WRITE_TOKEN`
 only if you need the static-token fallback.
 
+When Vercel connects to Railway Postgres, use Railway's public/external TCP
+proxy connection string. Do not use a `postgres.railway.internal` host in
+Vercel; that hostname is only reachable by services running inside Railway.
+
 Set `NEXTAUTH_SECRET` to a long random value. Set `PORTAL_ACCESS_CODE` to the
 temporary sign-in code for seeded users; local development defaults to `demo`
 when the variable is omitted.
