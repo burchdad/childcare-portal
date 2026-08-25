@@ -102,8 +102,20 @@ export const dashboardMetrics = {
 };
 
 export const activityItems = [
-  "Sarah Jones approved 12 bulk training records for Tyler Center.",
-  "CPR certificate for Jane Smith was marked expired by nightly recalculation.",
-  "Abigail Stroman submitted external training for director review.",
-  "Compliance Rule Set: Texas Child Care Requirements 2026 was versioned.",
+  {
+    id: "activity-001",
+    message: "Sarah Jones approved 12 bulk training records for Tyler Center.",
+  },
+  {
+    id: "activity-002",
+    message: "CPR certificate for Jane Smith was marked expired by nightly recalculation.",
+  },
+  {
+    id: "activity-003",
+    message: "Abigail Stroman submitted external training for director review.",
+  },
+  {
+    id: "activity-004",
+    message: "Compliance Rule Set: Texas Child Care Requirements 2026 was versioned.",
+  },
 ];

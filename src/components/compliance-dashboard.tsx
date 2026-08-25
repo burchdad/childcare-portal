@@ -208,8 +208,9 @@ export function ComplianceDashboard() {
       cprExpiring: counts.cprExpiring,
       cprExpired: counts.cprExpired,
       deficient: counts.deficient,
-      pendingApprovals: activities.filter((activity) => activity.includes("submitted"))
-        .length,
+      pendingApprovals: activities.filter((activity) =>
+        activity.message.includes("submitted"),
+      ).length,
     };
   }, [activities, rows]);
 
@@ -221,7 +222,9 @@ export function ComplianceDashboard() {
     rows.find((employee) => employee.id === selectedEmployeeId) ?? rows[0];
 
   function addActivity(message: string) {
-    setActivities((current) => [message, ...current].slice(0, 8));
+    setActivities((current) =>
+      [{ id: crypto.randomUUID(), message }, ...current].slice(0, 8),
+    );
   }
 
   function handleAddEmployee(event: FormEvent<HTMLFormElement>) {
@@ -748,9 +751,9 @@ export function ComplianceDashboard() {
                 {activities.map((item) => (
                   <p
                     className="border-l-2 border-[#cbd5c0] pl-3 text-sm text-[#4e5d54]"
-                    key={item}
+                    key={item.id}
                   >
-                    {item}
+                    {item.message}
                   </p>
                 ))}
               </div>
