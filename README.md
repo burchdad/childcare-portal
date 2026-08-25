@@ -29,7 +29,7 @@ Open [http://localhost:3000](http://localhost:3000).
 Set `DATABASE_URL` to a Railway PostgreSQL connection string, then run:
 
 ```bash
-npm run prisma:migrate
+npm run prisma:push
 npm run prisma:seed
 ```
 
@@ -51,7 +51,7 @@ PostgreSQL through `/api/documents/upload`.
 
 `railway.json` configures Nixpacks and uses `/api/health` for deployment health
 checks. Add a Railway PostgreSQL service and set `DATABASE_URL` before applying
-migrations and the seed script.
+the schema and the seed script.
 
 ## Vercel
 
