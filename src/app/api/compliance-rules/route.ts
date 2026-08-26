@@ -29,6 +29,8 @@ export async function PATCH(request: Request) {
     "PLATFORM_ADMIN",
     "ORG_OWNER",
     "CORPORATE_ADMIN",
+    "LOCATION_DIRECTOR",
+    "ASSISTANT_DIRECTOR",
     "COMPLIANCE_MANAGER",
   ]);
   if ("error" in session) {

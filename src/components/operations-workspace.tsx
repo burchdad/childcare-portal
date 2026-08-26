@@ -99,7 +99,9 @@ export function OperationsWorkspace({ canEdit }: { canEdit: boolean }) {
   const [ruleSets, setRuleSets] = useState<RuleSet[]>([]);
   const [selectedEmployeeId, setSelectedEmployeeId] = useState("");
   const [message, setMessage] = useState("");
+  const [busy, setBusy] = useState(false);
   const importFileRef = useRef<HTMLInputElement>(null);
+  const documentFileRef = useRef<HTMLInputElement>(null);
 
   const selectedEmployee = useMemo(
     () => employees.find((employee) => employee.id === selectedEmployeeId) ?? employees[0],
@@ -119,6 +121,19 @@ export function OperationsWorkspace({ canEdit }: { canEdit: boolean }) {
     setImports(importData.batches);
     setRuleSets(ruleData.ruleSets);
     setSelectedEmployeeId((current) => current || employeeData.employees[0]?.id || "");
+  }
+
+  async function runAction(action: () => Promise<void>) {
+    setBusy(true);
+    setMessage("");
+
+    try {
+      await action();
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Action failed.");
+    } finally {
+      setBusy(false);
+    }
   }
 
   useEffect(() => {
@@ -159,29 +174,51 @@ export function OperationsWorkspace({ canEdit }: { canEdit: boolean }) {
     if (!selectedEmployee || !canEdit) return;
     const form = new FormData(event.currentTarget);
 
-    await jsonFetch(`/api/employees/${selectedEmployee.id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        firstName: form.get("firstName"),
-        lastName: form.get("lastName"),
-        email: form.get("email"),
-        phone: form.get("phone"),
-        annualTrainingDueDate: form.get("annualTrainingDueDate"),
-        employmentStatus: form.get("employmentStatus"),
-      }),
+    await runAction(async () => {
+      await jsonFetch(`/api/employees/${selectedEmployee.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          firstName: form.get("firstName"),
+          lastName: form.get("lastName"),
+          email: form.get("email"),
+          phone: form.get("phone"),
+          annualTrainingDueDate: form.get("annualTrainingDueDate"),
+          employmentStatus: form.get("employmentStatus"),
+        }),
+      });
+      setMessage("Employee saved live.");
+      await refresh();
     });
-    setMessage("Employee saved.");
-    await refresh();
+  }
+
+  async function createEmployee(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!canEdit) return;
+    const form = new FormData(event.currentTarget);
+
+    await runAction(async () => {
+      const result = await jsonFetch<{ employee: Employee }>("/api/employees", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(Object.fromEntries(form)),
+      });
+      setSelectedEmployeeId(result.employee.id);
+      setMessage(`${result.employee.name} created live.`);
+      event.currentTarget.reset();
+      await refresh();
+    });
   }
 
   async function removeEmployee() {
     if (!selectedEmployee || !canEdit) return;
 
-    await jsonFetch(`/api/employees/${selectedEmployee.id}`, { method: "DELETE" });
-    setMessage(`${selectedEmployee.name} was terminated.`);
-    setSelectedEmployeeId("");
-    await refresh();
+    await runAction(async () => {
+      await jsonFetch(`/api/employees/${selectedEmployee.id}`, { method: "DELETE" });
+      setMessage(`${selectedEmployee.name} was terminated live.`);
+      setSelectedEmployeeId("");
+      await refresh();
+    });
   }
 
   async function addTraining(event: FormEvent<HTMLFormElement>) {
@@ -189,14 +226,16 @@ export function OperationsWorkspace({ canEdit }: { canEdit: boolean }) {
     if (!canEdit) return;
     const form = new FormData(event.currentTarget);
 
-    await jsonFetch("/api/training", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(Object.fromEntries(form)),
+    await runAction(async () => {
+      await jsonFetch("/api/training", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(Object.fromEntries(form)),
+      });
+      setMessage("Training record saved live.");
+      event.currentTarget.reset();
+      await refresh();
     });
-    setMessage("Training record saved.");
-    event.currentTarget.reset();
-    await refresh();
   }
 
   async function saveCertification(event: FormEvent<HTMLFormElement>) {
@@ -204,13 +243,15 @@ export function OperationsWorkspace({ canEdit }: { canEdit: boolean }) {
     if (!canEdit) return;
     const form = new FormData(event.currentTarget);
 
-    await jsonFetch("/api/certifications", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(Object.fromEntries(form)),
+    await runAction(async () => {
+      await jsonFetch("/api/certifications", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(Object.fromEntries(form)),
+      });
+      setMessage("Certification saved live.");
+      await refresh();
     });
-    setMessage("Certification saved.");
-    await refresh();
   }
 
   async function uploadImport() {
@@ -219,17 +260,21 @@ export function OperationsWorkspace({ canEdit }: { canEdit: boolean }) {
     const form = new FormData();
     form.append("file", file);
 
-    await jsonFetch("/api/imports/workbook", { method: "POST", body: form });
-    setMessage("Workbook staged for review.");
-    if (importFileRef.current) importFileRef.current.value = "";
-    await refresh();
+    await runAction(async () => {
+      await jsonFetch("/api/imports/workbook", { method: "POST", body: form });
+      setMessage("Workbook staged live for review.");
+      if (importFileRef.current) importFileRef.current.value = "";
+      await refresh();
+    });
   }
 
   async function commitImport(batchId: string) {
     if (!canEdit) return;
-    await jsonFetch(`/api/imports/workbook/${batchId}/commit`, { method: "POST" });
-    setMessage("Workbook import committed.");
-    await refresh();
+    await runAction(async () => {
+      await jsonFetch(`/api/imports/workbook/${batchId}/commit`, { method: "POST" });
+      setMessage("Workbook import committed live.");
+      await refresh();
+    });
   }
 
   async function updateRequirement(event: FormEvent<HTMLFormElement>) {
@@ -237,24 +282,48 @@ export function OperationsWorkspace({ canEdit }: { canEdit: boolean }) {
     if (!canEdit) return;
     const form = new FormData(event.currentTarget);
 
-    await jsonFetch("/api/compliance-rules", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(Object.fromEntries(form)),
+    await runAction(async () => {
+      await jsonFetch("/api/compliance-rules", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(Object.fromEntries(form)),
+      });
+      setMessage("Compliance requirement saved live.");
+      await refresh();
     });
-    setMessage("Compliance requirement saved.");
-    await refresh();
   }
 
   async function archiveDocument(id: string) {
     if (!canEdit) return;
-    await jsonFetch("/api/documents", {
-      method: "DELETE",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id }),
+    await runAction(async () => {
+      await jsonFetch("/api/documents", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id }),
+      });
+      setMessage("Document archived live.");
+      await refresh();
     });
-    setMessage("Document archived.");
-    await refresh();
+  }
+
+  async function uploadDocument(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!canEdit) return;
+    const file = documentFileRef.current?.files?.[0];
+    if (!file) {
+      setMessage("Choose a document file first.");
+      return;
+    }
+
+    const form = new FormData(event.currentTarget);
+    form.set("file", file);
+
+    await runAction(async () => {
+      await jsonFetch("/api/documents/upload", { method: "POST", body: form });
+      setMessage("Document uploaded live.");
+      event.currentTarget.reset();
+      await refresh();
+    });
   }
 
   return (
@@ -275,10 +344,27 @@ export function OperationsWorkspace({ canEdit }: { canEdit: boolean }) {
             {label}
           </button>
         ))}
+        <button
+          className="ml-auto inline-flex h-10 shrink-0 items-center gap-2 rounded-lg border border-[#cbd5c0] bg-white px-3 text-sm font-medium text-[#2f3a34]"
+          disabled={busy}
+          onClick={() => runAction(async () => {
+            await refresh();
+            setMessage("Live data reloaded.");
+          })}
+          type="button"
+        >
+          <Settings2 className="h-4 w-4" aria-hidden />
+          Reload Live Data
+        </button>
       </nav>
 
       {message ? (
-        <p className="rounded-lg border border-[#d9dfd1] bg-white px-4 py-3 text-sm text-[#405048]">
+        <p className={`rounded-lg border px-4 py-3 text-sm ${
+          message.toLowerCase().includes("failed") || message.toLowerCase().includes("denied") || message.toLowerCase().includes("required")
+            ? "border-[#e7c7bd] bg-[#fff8f5] text-[#9a432d]"
+            : "border-[#d9dfd1] bg-white text-[#405048]"
+        }`}>
+          {busy ? "Working live... " : ""}
           {message}
         </p>
       ) : null}
@@ -306,48 +392,70 @@ export function OperationsWorkspace({ canEdit }: { canEdit: boolean }) {
               ))}
             </div>
           </Panel>
-          <Panel title="Employee Details">
-            {selectedEmployee ? (
-              <form className="grid gap-4" onSubmit={updateEmployee}>
-                <div className="grid gap-3 md:grid-cols-2">
-                  <Input defaultValue={selectedEmployee.firstName} label="First Name" name="firstName" />
-                  <Input defaultValue={selectedEmployee.lastName} label="Last Name" name="lastName" />
-                  <Input defaultValue={selectedEmployee.email ?? ""} label="Email" name="email" />
-                  <Input defaultValue={selectedEmployee.phone ?? ""} label="Phone" name="phone" />
-                  <Input
-                    defaultValue={dateValue(selectedEmployee.annualDueDate)}
-                    label="Annual Due Date"
-                    name="annualTrainingDueDate"
-                    type="date"
-                  />
-                  <label className="grid gap-1 text-sm font-medium">
-                    Employment Status
-                    <select className={fieldClass()} defaultValue={selectedEmployee.employmentStatus} name="employmentStatus">
-                      <option>ACTIVE</option>
-                      <option>LEAVE</option>
-                      <option>TERMINATED</option>
-                      <option>FUTURE_HIRE</option>
-                    </select>
-                  </label>
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  <Submit disabled={!canEdit} icon={Save}>Save Employee</Submit>
-                  <button
-                    className="inline-flex h-10 items-center gap-2 rounded-lg border border-[#e7c7bd] bg-white px-3 text-sm font-semibold text-[#9a432d]"
-                    disabled={!canEdit}
-                    onClick={removeEmployee}
-                    type="button"
-                  >
-                    <Trash2 className="h-4 w-4" aria-hidden />
-                    Terminate
-                  </button>
-                  <Link className="inline-flex h-10 items-center rounded-lg border border-[#cbd5c0] bg-white px-3 text-sm font-semibold" href={`/employees/${selectedEmployee.id}`}>
-                    Open Profile
-                  </Link>
+          <div className="grid gap-5">
+            <Panel title="Add Employee">
+              <form className="grid gap-3 md:grid-cols-2" onSubmit={createEmployee}>
+                <Input label="First Name" name="firstName" />
+                <Input label="Last Name" name="lastName" />
+                <Input label="Email" name="email" />
+                <Input label="Phone" name="phone" />
+                <label className="grid gap-1 text-sm font-medium">
+                  Role
+                  <select className={fieldClass()} name="role">
+                    {["Caregiver", "Assistant Director", "Director", "Cook", "Substitute"].map((role) => (
+                      <option key={role}>{role}</option>
+                    ))}
+                  </select>
+                </label>
+                <Input label="Annual Due Date" name="annualDueDate" type="date" />
+                <div className="md:col-span-2">
+                  <Submit disabled={!canEdit || busy} icon={UsersRound}>Create Employee</Submit>
                 </div>
               </form>
-            ) : null}
-          </Panel>
+            </Panel>
+            <Panel title="Employee Details">
+              {selectedEmployee ? (
+                <form className="grid gap-4" onSubmit={updateEmployee}>
+                  <div className="grid gap-3 md:grid-cols-2">
+                    <Input defaultValue={selectedEmployee.firstName} label="First Name" name="firstName" />
+                    <Input defaultValue={selectedEmployee.lastName} label="Last Name" name="lastName" />
+                    <Input defaultValue={selectedEmployee.email ?? ""} label="Email" name="email" />
+                    <Input defaultValue={selectedEmployee.phone ?? ""} label="Phone" name="phone" />
+                    <Input
+                      defaultValue={dateValue(selectedEmployee.annualDueDate)}
+                      label="Annual Due Date"
+                      name="annualTrainingDueDate"
+                      type="date"
+                    />
+                    <label className="grid gap-1 text-sm font-medium">
+                      Employment Status
+                      <select className={fieldClass()} defaultValue={selectedEmployee.employmentStatus} name="employmentStatus">
+                        <option>ACTIVE</option>
+                        <option>LEAVE</option>
+                        <option>TERMINATED</option>
+                        <option>FUTURE_HIRE</option>
+                      </select>
+                    </label>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <Submit disabled={!canEdit || busy} icon={Save}>Save Employee</Submit>
+                    <button
+                      className="inline-flex h-10 items-center gap-2 rounded-lg border border-[#e7c7bd] bg-white px-3 text-sm font-semibold text-[#9a432d] disabled:opacity-60"
+                      disabled={!canEdit || busy}
+                      onClick={removeEmployee}
+                      type="button"
+                    >
+                      <Trash2 className="h-4 w-4" aria-hidden />
+                      Terminate
+                    </button>
+                    <Link className="inline-flex h-10 items-center rounded-lg border border-[#cbd5c0] bg-white px-3 text-sm font-semibold" href={`/employees/${selectedEmployee.id}`}>
+                      Open Profile
+                    </Link>
+                  </div>
+                </form>
+              ) : null}
+            </Panel>
+          </div>
         </section>
       ) : null}
 
@@ -370,7 +478,7 @@ export function OperationsWorkspace({ canEdit }: { canEdit: boolean }) {
               </select>
             </label>
             <div className="md:col-span-2">
-              <Submit disabled={!canEdit} icon={GraduationCap}>Save Training</Submit>
+              <Submit disabled={!canEdit || busy} icon={GraduationCap}>Save Training</Submit>
             </div>
           </form>
         </Panel>
@@ -392,7 +500,7 @@ export function OperationsWorkspace({ canEdit }: { canEdit: boolean }) {
             <Input label="Issue Date" name="issueDate" type="date" />
             <Input label="Expiration Date" name="expirationDate" type="date" />
             <div className="md:col-span-2">
-              <Submit disabled={!canEdit} icon={BadgeCheck}>Save Certification</Submit>
+              <Submit disabled={!canEdit || busy} icon={BadgeCheck}>Save Certification</Submit>
             </div>
           </form>
         </Panel>
@@ -400,6 +508,22 @@ export function OperationsWorkspace({ canEdit }: { canEdit: boolean }) {
 
       {activeTab === "documents" ? (
         <Panel title="Document Library">
+          <form className="mb-5 grid gap-3 rounded-lg border border-[#e1e6dc] bg-[#fffdf7] p-4 md:grid-cols-2" onSubmit={uploadDocument}>
+            <EmployeeSelect employees={employees} name="employeeId" />
+            <Input defaultValue="Training certificate" label="Document Name" name="documentName" />
+            <label className="grid gap-1 text-sm font-medium md:col-span-2">
+              File
+              <input
+                accept=".pdf,.png,.jpg,.jpeg,.doc,.docx,image/*,application/pdf"
+                className="rounded-lg border border-[#d9dfd1] bg-white px-3 py-2 text-sm"
+                ref={documentFileRef}
+                type="file"
+              />
+            </label>
+            <div className="md:col-span-2">
+              <Submit disabled={!canEdit || busy} icon={Upload}>Upload Document</Submit>
+            </div>
+          </form>
           <div className="grid gap-3">
             {documents.map((document) => (
               <article className="grid gap-3 rounded-lg border border-[#e1e6dc] bg-white p-4 md:grid-cols-[1fr_auto]" key={document.id}>
@@ -417,7 +541,7 @@ export function OperationsWorkspace({ canEdit }: { canEdit: boolean }) {
                   </a>
                   <button
                     className="inline-flex h-9 items-center gap-2 rounded-lg border border-[#e7c7bd] px-3 text-sm font-semibold text-[#9a432d]"
-                    disabled={!canEdit}
+                    disabled={!canEdit || busy}
                     onClick={() => archiveDocument(document.id)}
                     type="button"
                   >
@@ -434,7 +558,7 @@ export function OperationsWorkspace({ canEdit }: { canEdit: boolean }) {
         <Panel title="Workbook Import Review">
           <div className="flex flex-wrap gap-2">
             <input accept=".csv,.tsv,text/csv,text/tab-separated-values" className="rounded-lg border border-[#d9dfd1] bg-white px-3 py-2 text-sm" ref={importFileRef} type="file" />
-            <button className="inline-flex h-10 items-center gap-2 rounded-lg bg-[#224433] px-3 text-sm font-semibold text-white" disabled={!canEdit} onClick={uploadImport} type="button">
+            <button className="inline-flex h-10 items-center gap-2 rounded-lg bg-[#224433] px-3 text-sm font-semibold text-white disabled:opacity-60" disabled={!canEdit || busy} onClick={uploadImport} type="button">
               <Upload className="h-4 w-4" aria-hidden />
               Stage Workbook
             </button>
@@ -449,7 +573,7 @@ export function OperationsWorkspace({ canEdit }: { canEdit: boolean }) {
                       {batch.status} · {batch.validRowCount} ready · {batch.errorRowCount} errors · {batch.rowCount} rows
                     </p>
                   </div>
-                  <button className="h-9 rounded-lg bg-[#224433] px-3 text-sm font-semibold text-white disabled:opacity-60" disabled={!canEdit || batch.status === "COMMITTED" || batch.validRowCount === 0} onClick={() => commitImport(batch.id)} type="button">
+                  <button className="h-9 rounded-lg bg-[#224433] px-3 text-sm font-semibold text-white disabled:opacity-60" disabled={!canEdit || busy || batch.status === "COMMITTED" || batch.validRowCount === 0} onClick={() => commitImport(batch.id)} type="button">
                     Commit Ready Rows
                   </button>
                 </div>
@@ -496,7 +620,7 @@ export function OperationsWorkspace({ canEdit }: { canEdit: boolean }) {
                     <Input defaultValue={String(requirement.minimumInstructorLedHours ?? 0)} label="Instructor-Led Hours" name="minimumInstructorLedHours" type="number" />
                   </div>
                   <div className="mt-4">
-                    <Submit disabled={!canEdit} icon={Save}>Save Rule</Submit>
+                    <Submit disabled={!canEdit || busy} icon={Save}>Save Rule</Submit>
                   </div>
                 </form>
               )),
