@@ -100,10 +100,12 @@ upload their own documents.
 Employee profile pages live at `/employees/[id]` and include overview,
 training, certifications, documents, compliance, and activity sections.
 
-The `/operations` workspace provides director/admin UI for employee edits,
-terminations, profile navigation, training record entry, CPR/First Aid updates,
-document downloads/archive actions, workbook staging/commit, and compliance
-rule edits.
+The dashboard is the monitoring surface: metrics, risk list, priority employee,
+filters, and quick actions. The `/manage` workspace is the back-office surface:
+employee edits, terminations, profile navigation, training record entry,
+CPR/First Aid updates, document downloads/archive actions, workbook
+staging/commit, and compliance rule edits. `/operations` redirects to
+`/manage` for compatibility with older links.
 
 ## Current Product Slice
 
@@ -114,7 +116,7 @@ rule edits.
 - Signed login with role-aware API permission checks
 - Employee profile pages with training, certification, document, compliance,
   and activity sections
-- Operations workspace for employee, training, certification, document, import,
+- Manage workspace for employee, training, certification, document, import,
   and compliance settings workflows
 - Workbook import staging before commit
 - Compliance engine with explicit `UNKNOWN` handling

@@ -92,7 +92,7 @@ function dateValue(value?: string | null) {
   return value ? new Date(value).toISOString().slice(0, 10) : "";
 }
 
-export function OperationsWorkspace({ canEdit }: { canEdit: boolean }) {
+export function ManageWorkspace({ canEdit }: { canEdit: boolean }) {
   const [activeTab, setActiveTab] = useState<Tab>("employees");
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [documents, setDocuments] = useState<DocumentRow[]>([]);
