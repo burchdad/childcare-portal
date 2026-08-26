@@ -12,6 +12,7 @@ import {
   Trash2,
   Upload,
   UsersRound,
+  X,
 } from "lucide-react";
 
 type Tab = "employees" | "training" | "certifications" | "documents" | "imports" | "settings";
@@ -100,6 +101,7 @@ export function OperationsWorkspace({ canEdit }: { canEdit: boolean }) {
   const [selectedEmployeeId, setSelectedEmployeeId] = useState("");
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
+  const [showAddEmployee, setShowAddEmployee] = useState(false);
   const importFileRef = useRef<HTMLInputElement>(null);
   const documentFileRef = useRef<HTMLInputElement>(null);
 
@@ -203,10 +205,11 @@ export function OperationsWorkspace({ canEdit }: { canEdit: boolean }) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(Object.fromEntries(form)),
       });
-      setSelectedEmployeeId(result.employee.id);
       setMessage(`${result.employee.name} created live.`);
       event.currentTarget.reset();
       await refresh();
+      setSelectedEmployeeId(result.employee.id);
+      setShowAddEmployee(false);
     });
   }
 
@@ -372,6 +375,15 @@ export function OperationsWorkspace({ canEdit }: { canEdit: boolean }) {
       {activeTab === "employees" ? (
         <section className="grid gap-5 lg:grid-cols-[360px_1fr]">
           <Panel title="Roster">
+            <button
+              className="mb-4 inline-flex h-10 w-full items-center justify-center gap-2 rounded-lg bg-[#224433] px-3 text-sm font-semibold text-white disabled:opacity-60"
+              disabled={!canEdit || busy}
+              onClick={() => setShowAddEmployee(true)}
+              type="button"
+            >
+              <UsersRound className="h-4 w-4" aria-hidden />
+              Add Employee
+            </button>
             <div className="grid gap-2">
               {employees.map((employee) => (
                 <button
@@ -393,29 +405,9 @@ export function OperationsWorkspace({ canEdit }: { canEdit: boolean }) {
             </div>
           </Panel>
           <div className="grid gap-5">
-            <Panel title="Add Employee">
-              <form className="grid gap-3 md:grid-cols-2" onSubmit={createEmployee}>
-                <Input label="First Name" name="firstName" />
-                <Input label="Last Name" name="lastName" />
-                <Input label="Email" name="email" />
-                <Input label="Phone" name="phone" />
-                <label className="grid gap-1 text-sm font-medium">
-                  Role
-                  <select className={fieldClass()} name="role">
-                    {["Caregiver", "Assistant Director", "Director", "Cook", "Substitute"].map((role) => (
-                      <option key={role}>{role}</option>
-                    ))}
-                  </select>
-                </label>
-                <Input label="Annual Due Date" name="annualDueDate" type="date" />
-                <div className="md:col-span-2">
-                  <Submit disabled={!canEdit || busy} icon={UsersRound}>Create Employee</Submit>
-                </div>
-              </form>
-            </Panel>
             <Panel title="Employee Details">
               {selectedEmployee ? (
-                <form className="grid gap-4" onSubmit={updateEmployee}>
+                <form className="grid gap-4" key={selectedEmployee.id} onSubmit={updateEmployee}>
                   <div className="grid gap-3 md:grid-cols-2">
                     <Input defaultValue={selectedEmployee.firstName} label="First Name" name="firstName" />
                     <Input defaultValue={selectedEmployee.lastName} label="Last Name" name="lastName" />
@@ -457,6 +449,36 @@ export function OperationsWorkspace({ canEdit }: { canEdit: boolean }) {
             </Panel>
           </div>
         </section>
+      ) : null}
+
+      {showAddEmployee ? (
+        <Modal onClose={() => setShowAddEmployee(false)} title="Add Employee">
+          <form className="grid gap-3 p-5 md:grid-cols-2" onSubmit={createEmployee}>
+            <Input label="First Name" name="firstName" />
+            <Input label="Last Name" name="lastName" />
+            <Input label="Email" name="email" />
+            <Input label="Phone" name="phone" />
+            <label className="grid gap-1 text-sm font-medium">
+              Role
+              <select className={fieldClass()} name="role">
+                {["Caregiver", "Assistant Director", "Director", "Cook", "Substitute"].map((role) => (
+                  <option key={role}>{role}</option>
+                ))}
+              </select>
+            </label>
+            <Input label="Annual Due Date" name="annualDueDate" type="date" />
+            <div className="flex gap-2 md:col-span-2">
+              <Submit disabled={!canEdit || busy} icon={UsersRound}>Create Employee</Submit>
+              <button
+                className="inline-flex h-10 items-center rounded-lg border border-[#cbd5c0] bg-white px-3 text-sm font-semibold"
+                onClick={() => setShowAddEmployee(false)}
+                type="button"
+              >
+                Cancel
+              </button>
+            </div>
+          </form>
+        </Modal>
       ) : null}
 
       {activeTab === "training" ? (
@@ -638,6 +660,35 @@ function Panel({ children, title }: { children: React.ReactNode; title: string }
       <h2 className="text-lg font-semibold">{title}</h2>
       <div className="mt-4">{children}</div>
     </section>
+  );
+}
+
+function Modal({
+  children,
+  onClose,
+  title,
+}: {
+  children: React.ReactNode;
+  onClose: () => void;
+  title: string;
+}) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#18211d]/35 p-4">
+      <section className="w-full max-w-3xl rounded-lg border border-[#d9dfd1] bg-white shadow-xl">
+        <div className="flex items-center justify-between border-b border-[#e5e9df] px-5 py-4">
+          <h2 className="text-lg font-semibold">{title}</h2>
+          <button
+            className="flex h-9 w-9 items-center justify-center rounded-lg border border-[#d9dfd1] text-[#4d5b52] hover:bg-[#f3f6ef]"
+            onClick={onClose}
+            title="Close"
+            type="button"
+          >
+            <X className="h-4 w-4" aria-hidden />
+          </button>
+        </div>
+        {children}
+      </section>
+    </div>
   );
 }
 
