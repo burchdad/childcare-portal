@@ -109,6 +109,23 @@ export function ManageWorkspace({ canEdit }: { canEdit: boolean }) {
     () => employees.find((employee) => employee.id === selectedEmployeeId) ?? employees[0],
     [employees, selectedEmployeeId],
   );
+  const selectedEmployeeDocuments = useMemo(
+    () =>
+      selectedEmployee
+        ? documents.filter((document) =>
+            document.employee
+              ? `${document.employee.firstName} ${document.employee.lastName}` ===
+                selectedEmployee.name
+              : false,
+          )
+        : [],
+    [documents, selectedEmployee],
+  );
+  const usesEmployeeRoster =
+    activeTab === "employees" ||
+    activeTab === "training" ||
+    activeTab === "certifications" ||
+    activeTab === "documents";
 
   async function refresh() {
     const [employeeData, documentData, importData, ruleData] = await Promise.all([
@@ -175,6 +192,7 @@ export function ManageWorkspace({ canEdit }: { canEdit: boolean }) {
     event.preventDefault();
     if (!selectedEmployee || !canEdit) return;
     const form = new FormData(event.currentTarget);
+    form.set("employeeId", selectedEmployee.id);
 
     await runAction(async () => {
       await jsonFetch(`/api/employees/${selectedEmployee.id}`, {
@@ -197,7 +215,9 @@ export function ManageWorkspace({ canEdit }: { canEdit: boolean }) {
   async function createEmployee(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!canEdit) return;
+    if (!selectedEmployee) return;
     const form = new FormData(event.currentTarget);
+    form.set("employeeId", selectedEmployee.id);
 
     await runAction(async () => {
       const result = await jsonFetch<{ employee: Employee }>("/api/employees", {
@@ -312,6 +332,7 @@ export function ManageWorkspace({ canEdit }: { canEdit: boolean }) {
   async function uploadDocument(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!canEdit) return;
+    if (!selectedEmployee) return;
     const file = documentFileRef.current?.files?.[0];
     if (!file) {
       setMessage("Choose a document file first.");
@@ -319,6 +340,7 @@ export function ManageWorkspace({ canEdit }: { canEdit: boolean }) {
     }
 
     const form = new FormData(event.currentTarget);
+    form.set("employeeId", selectedEmployee.id);
     form.set("file", file);
 
     await runAction(async () => {
@@ -372,40 +394,19 @@ export function ManageWorkspace({ canEdit }: { canEdit: boolean }) {
         </p>
       ) : null}
 
-      {activeTab === "employees" ? (
+      {usesEmployeeRoster ? (
         <section className="grid gap-5 lg:grid-cols-[360px_1fr]">
-          <Panel title="Roster">
-            <button
-              className="mb-4 inline-flex h-10 w-full items-center justify-center gap-2 rounded-lg bg-[#224433] px-3 text-sm font-semibold text-white disabled:opacity-60"
-              disabled={!canEdit || busy}
-              onClick={() => setShowAddEmployee(true)}
-              type="button"
-            >
-              <UsersRound className="h-4 w-4" aria-hidden />
-              Add Employee
-            </button>
-            <div className="grid gap-2">
-              {employees.map((employee) => (
-                <button
-                  className={`rounded-lg border px-3 py-2 text-left text-sm ${
-                    selectedEmployee?.id === employee.id
-                      ? "border-[#8aa27b] bg-[#edf2e8]"
-                      : "border-[#e1e6dc] bg-white"
-                  }`}
-                  key={employee.id}
-                  onClick={() => setSelectedEmployeeId(employee.id)}
-                  type="button"
-                >
-                  <span className="font-semibold">{employee.name}</span>
-                  <span className="block text-[#66705f]">
-                    {employee.role} · {employee.compliance.status.replaceAll("_", " ")}
-                  </span>
-                </button>
-              ))}
-            </div>
-          </Panel>
+          <RosterPanel
+            busy={busy}
+            canEdit={canEdit}
+            employees={employees}
+            onAddEmployee={() => setShowAddEmployee(true)}
+            onSelectEmployee={setSelectedEmployeeId}
+            selectedEmployeeId={selectedEmployee?.id ?? ""}
+          />
           <div className="grid gap-5">
-            <Panel title="Employee Details">
+            {activeTab === "employees" ? (
+              <Panel title="Employee Details">
               {selectedEmployee ? (
                 <form className="grid gap-4" key={selectedEmployee.id} onSubmit={updateEmployee}>
                   <div className="grid gap-3 md:grid-cols-2">
@@ -446,7 +447,98 @@ export function ManageWorkspace({ canEdit }: { canEdit: boolean }) {
                   </div>
                 </form>
               ) : null}
-            </Panel>
+              </Panel>
+            ) : null}
+
+            {activeTab === "training" ? (
+              <Panel title={selectedEmployee ? `Add Training for ${selectedEmployee.name}` : "Add Training"}>
+                {selectedEmployee ? (
+                  <form className="grid gap-4 md:grid-cols-2" key={selectedEmployee.id} onSubmit={addTraining}>
+                    <Input defaultValue="Annual training" label="Course Name" name="courseName" />
+                    <Input label="Provider" name="provider" />
+                    <Input defaultValue={new Date().toISOString().slice(0, 10)} label="Training Date" name="trainingDate" type="date" />
+                    <Input defaultValue="1" label="Hours" name="hours" type="number" />
+                    <label className="grid gap-1 text-sm font-medium">
+                      Delivery Type
+                      <select className={fieldClass()} name="trainingDeliveryType">
+                        <option value="ONLINE">Online</option>
+                        <option value="INSTRUCTOR_LED">Instructor Led</option>
+                        <option value="SELF_STUDY">Self Study</option>
+                        <option value="IN_PERSON">In Person</option>
+                        <option value="OTHER">Other</option>
+                      </select>
+                    </label>
+                    <div className="md:col-span-2">
+                      <Submit disabled={!canEdit || busy} icon={GraduationCap}>Save Training</Submit>
+                    </div>
+                  </form>
+                ) : null}
+              </Panel>
+            ) : null}
+
+            {activeTab === "certifications" ? (
+              <Panel title={selectedEmployee ? `CPR / First Aid for ${selectedEmployee.name}` : "CPR / First Aid"}>
+                {selectedEmployee ? (
+                  <form className="grid gap-4 md:grid-cols-2" key={selectedEmployee.id} onSubmit={saveCertification}>
+                    <label className="grid gap-1 text-sm font-medium">
+                      Certification
+                      <select className={fieldClass()} name="certificationType">
+                        <option value="CPR">CPR</option>
+                        <option value="FIRST_AID">First Aid</option>
+                      </select>
+                    </label>
+                    <Input label="Provider" name="provider" />
+                    <Input label="Certificate Number" name="certificateNumber" />
+                    <Input label="Issue Date" name="issueDate" type="date" />
+                    <Input label="Expiration Date" name="expirationDate" type="date" />
+                    <div className="md:col-span-2">
+                      <Submit disabled={!canEdit || busy} icon={BadgeCheck}>Save Certification</Submit>
+                    </div>
+                  </form>
+                ) : null}
+              </Panel>
+            ) : null}
+
+            {activeTab === "documents" ? (
+              <Panel title={selectedEmployee ? `Documents for ${selectedEmployee.name}` : "Documents"}>
+                {selectedEmployee ? (
+                  <>
+                    <form className="mb-5 grid gap-3 rounded-lg border border-[#e1e6dc] bg-[#fffdf7] p-4 md:grid-cols-2" key={selectedEmployee.id} onSubmit={uploadDocument}>
+                      <Input defaultValue="Training certificate" label="Document Name" name="documentName" />
+                      <label className="grid gap-1 text-sm font-medium">
+                        File
+                        <input
+                          accept=".pdf,.png,.jpg,.jpeg,.doc,.docx,image/*,application/pdf"
+                          className="rounded-lg border border-[#d9dfd1] bg-white px-3 py-2 text-sm"
+                          ref={documentFileRef}
+                          type="file"
+                        />
+                      </label>
+                      <div className="md:col-span-2">
+                        <Submit disabled={!canEdit || busy} icon={Upload}>Upload Document</Submit>
+                      </div>
+                    </form>
+                    <div className="grid gap-3">
+                      {selectedEmployeeDocuments.length ? (
+                        selectedEmployeeDocuments.map((document) => (
+                          <DocumentCard
+                            busy={busy}
+                            canEdit={canEdit}
+                            document={document}
+                            key={document.id}
+                            onArchive={archiveDocument}
+                          />
+                        ))
+                      ) : (
+                        <p className="rounded-lg border border-[#e1e6dc] bg-white p-4 text-sm text-[#66705f]">
+                          No documents uploaded for {selectedEmployee.name}.
+                        </p>
+                      )}
+                    </div>
+                  </>
+                ) : null}
+              </Panel>
+            ) : null}
           </div>
         </section>
       ) : null}
@@ -479,101 +571,6 @@ export function ManageWorkspace({ canEdit }: { canEdit: boolean }) {
             </div>
           </form>
         </Modal>
-      ) : null}
-
-      {activeTab === "training" ? (
-        <Panel title="Add Training Record">
-          <form className="grid gap-4 md:grid-cols-2" onSubmit={addTraining}>
-            <EmployeeSelect employees={employees} name="employeeId" />
-            <Input defaultValue="Annual training" label="Course Name" name="courseName" />
-            <Input label="Provider" name="provider" />
-            <Input defaultValue={new Date().toISOString().slice(0, 10)} label="Training Date" name="trainingDate" type="date" />
-            <Input defaultValue="1" label="Hours" name="hours" type="number" />
-            <label className="grid gap-1 text-sm font-medium">
-              Delivery Type
-              <select className={fieldClass()} name="trainingDeliveryType">
-                <option value="ONLINE">Online</option>
-                <option value="INSTRUCTOR_LED">Instructor Led</option>
-                <option value="SELF_STUDY">Self Study</option>
-                <option value="IN_PERSON">In Person</option>
-                <option value="OTHER">Other</option>
-              </select>
-            </label>
-            <div className="md:col-span-2">
-              <Submit disabled={!canEdit || busy} icon={GraduationCap}>Save Training</Submit>
-            </div>
-          </form>
-        </Panel>
-      ) : null}
-
-      {activeTab === "certifications" ? (
-        <Panel title="CPR / First Aid Tracking">
-          <form className="grid gap-4 md:grid-cols-2" onSubmit={saveCertification}>
-            <EmployeeSelect employees={employees} name="employeeId" />
-            <label className="grid gap-1 text-sm font-medium">
-              Certification
-              <select className={fieldClass()} name="certificationType">
-                <option value="CPR">CPR</option>
-                <option value="FIRST_AID">First Aid</option>
-              </select>
-            </label>
-            <Input label="Provider" name="provider" />
-            <Input label="Certificate Number" name="certificateNumber" />
-            <Input label="Issue Date" name="issueDate" type="date" />
-            <Input label="Expiration Date" name="expirationDate" type="date" />
-            <div className="md:col-span-2">
-              <Submit disabled={!canEdit || busy} icon={BadgeCheck}>Save Certification</Submit>
-            </div>
-          </form>
-        </Panel>
-      ) : null}
-
-      {activeTab === "documents" ? (
-        <Panel title="Document Library">
-          <form className="mb-5 grid gap-3 rounded-lg border border-[#e1e6dc] bg-[#fffdf7] p-4 md:grid-cols-2" onSubmit={uploadDocument}>
-            <EmployeeSelect employees={employees} name="employeeId" />
-            <Input defaultValue="Training certificate" label="Document Name" name="documentName" />
-            <label className="grid gap-1 text-sm font-medium md:col-span-2">
-              File
-              <input
-                accept=".pdf,.png,.jpg,.jpeg,.doc,.docx,image/*,application/pdf"
-                className="rounded-lg border border-[#d9dfd1] bg-white px-3 py-2 text-sm"
-                ref={documentFileRef}
-                type="file"
-              />
-            </label>
-            <div className="md:col-span-2">
-              <Submit disabled={!canEdit || busy} icon={Upload}>Upload Document</Submit>
-            </div>
-          </form>
-          <div className="grid gap-3">
-            {documents.map((document) => (
-              <article className="grid gap-3 rounded-lg border border-[#e1e6dc] bg-white p-4 md:grid-cols-[1fr_auto]" key={document.id}>
-                <div>
-                  <h3 className="font-semibold">{document.documentType}</h3>
-                  <p className="text-sm text-[#66705f]">
-                    {document.fileName} · {Math.ceil(document.fileSize / 1024)} KB ·{" "}
-                    {document.employee ? `${document.employee.firstName} ${document.employee.lastName}` : "Unassigned"}
-                  </p>
-                </div>
-                <div className="flex gap-2">
-                  <a className="inline-flex h-9 items-center gap-2 rounded-lg border border-[#cbd5c0] px-3 text-sm font-semibold" href={`/api/documents/${document.id}/download`}>
-                    <Download className="h-4 w-4" aria-hidden />
-                    Download
-                  </a>
-                  <button
-                    className="inline-flex h-9 items-center gap-2 rounded-lg border border-[#e7c7bd] px-3 text-sm font-semibold text-[#9a432d]"
-                    disabled={!canEdit || busy}
-                    onClick={() => archiveDocument(document.id)}
-                    type="button"
-                  >
-                    Archive
-                  </button>
-                </div>
-              </article>
-            ))}
-          </div>
-        </Panel>
       ) : null}
 
       {activeTab === "imports" ? (
@@ -692,6 +689,95 @@ function Modal({
   );
 }
 
+function RosterPanel({
+  busy,
+  canEdit,
+  employees,
+  onAddEmployee,
+  onSelectEmployee,
+  selectedEmployeeId,
+}: {
+  busy: boolean;
+  canEdit: boolean;
+  employees: Employee[];
+  onAddEmployee: () => void;
+  onSelectEmployee: (employeeId: string) => void;
+  selectedEmployeeId: string;
+}) {
+  return (
+    <Panel title="Roster">
+      <button
+        className="mb-4 inline-flex h-10 w-full items-center justify-center gap-2 rounded-lg bg-[#224433] px-3 text-sm font-semibold text-white disabled:opacity-60"
+        disabled={!canEdit || busy}
+        onClick={onAddEmployee}
+        type="button"
+      >
+        <UsersRound className="h-4 w-4" aria-hidden />
+        Add Employee
+      </button>
+      <div className="grid gap-2">
+        {employees.map((employee) => (
+          <button
+            className={`rounded-lg border px-3 py-2 text-left text-sm ${
+              selectedEmployeeId === employee.id
+                ? "border-[#8aa27b] bg-[#edf2e8]"
+                : "border-[#e1e6dc] bg-white"
+            }`}
+            key={employee.id}
+            onClick={() => onSelectEmployee(employee.id)}
+            type="button"
+          >
+            <span className="font-semibold">{employee.name}</span>
+            <span className="block text-[#66705f]">
+              {employee.role} · {employee.compliance.status.replaceAll("_", " ")}
+            </span>
+          </button>
+        ))}
+      </div>
+    </Panel>
+  );
+}
+
+function DocumentCard({
+  busy,
+  canEdit,
+  document,
+  onArchive,
+}: {
+  busy: boolean;
+  canEdit: boolean;
+  document: DocumentRow;
+  onArchive: (id: string) => void;
+}) {
+  return (
+    <article className="grid gap-3 rounded-lg border border-[#e1e6dc] bg-white p-4 md:grid-cols-[1fr_auto]">
+      <div>
+        <h3 className="font-semibold">{document.documentType}</h3>
+        <p className="text-sm text-[#66705f]">
+          {document.fileName} · {Math.ceil(document.fileSize / 1024)} KB
+        </p>
+      </div>
+      <div className="flex gap-2">
+        <a
+          className="inline-flex h-9 items-center gap-2 rounded-lg border border-[#cbd5c0] px-3 text-sm font-semibold"
+          href={`/api/documents/${document.id}/download`}
+        >
+          <Download className="h-4 w-4" aria-hidden />
+          Download
+        </a>
+        <button
+          className="inline-flex h-9 items-center gap-2 rounded-lg border border-[#e7c7bd] px-3 text-sm font-semibold text-[#9a432d] disabled:opacity-60"
+          disabled={!canEdit || busy}
+          onClick={() => onArchive(document.id)}
+          type="button"
+        >
+          Archive
+        </button>
+      </div>
+    </article>
+  );
+}
+
 function Input({
   defaultValue = "",
   label,
@@ -707,21 +793,6 @@ function Input({
     <label className="grid gap-1 text-sm font-medium">
       {label}
       <input className={fieldClass()} defaultValue={defaultValue} name={name} type={type} />
-    </label>
-  );
-}
-
-function EmployeeSelect({ employees, name }: { employees: Employee[]; name: string }) {
-  return (
-    <label className="grid gap-1 text-sm font-medium">
-      Employee
-      <select className={fieldClass()} name={name}>
-        {employees.map((employee) => (
-          <option key={employee.id} value={employee.id}>
-            {employee.name}
-          </option>
-        ))}
-      </select>
     </label>
   );
 }
